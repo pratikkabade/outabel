@@ -1,4 +1,4 @@
-export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'INR' | 'AUD' | 'CAD';
+export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'INR';
 
 export interface CurrencyConfig {
   code: CurrencyCode;
@@ -12,8 +12,6 @@ export const CURRENCIES: Record<CurrencyCode, CurrencyConfig> = {
   GBP: { code: 'GBP', symbol: '£', label: 'GBP (£)' },
   JPY: { code: 'JPY', symbol: '¥', label: 'JPY (¥)' },
   INR: { code: 'INR', symbol: '₹', label: 'INR (₹)' },
-  AUD: { code: 'AUD', symbol: 'A$', label: 'AUD (A$)' },
-  CAD: { code: 'CAD', symbol: 'C$', label: 'CAD (C$)' },
 };
 
 export const formatCurrency = (amount: number, currency: CurrencyCode = 'USD'): string => {

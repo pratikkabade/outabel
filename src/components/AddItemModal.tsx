@@ -1,17 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Plane, 
-  Hotel, 
-  Camera, 
-  UtensilsCrossed, 
-  Coffee, 
-  FileText
-} from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
 import { useTrip } from '../context/TripContext';
 import { ItemType, TravelMode, MealType, ItineraryItem } from '../types/trip';
-import { addMinutesToTime, getDurationMinutes } from '../utils/time';
+import { addMinutesToTime, getDurationMinutes, formatDuration } from '../utils/time';
 import { CURRENCIES } from '../utils/currency';
+import {
+  CALENDAR_COLOR_STYLES,
+  getCalendarCategoryIcon,
+  resolveCalendarCategory,
+} from '../utils/calendarCategories';
+import { AnimatedModal } from './AnimatedModal';
 
 const DURATION_OPTIONS = [
   { value: 30, label: '30 minutes' },
@@ -36,6 +34,7 @@ export const AddItemModal: React.FC = () => {
     addItem, 
     updateItem, 
     currentTrip,
+    calendarCategories,
     currency 
   } = useTrip();
 
@@ -57,13 +56,26 @@ export const AddItemModal: React.FC = () => {
   const [isCheckOut, setIsCheckOut] = useState<boolean>(false);
 
   const [mealType, setMealType] = useState<MealType>('lunch');
+  const [isEditSession, setIsEditSession] = useState<boolean>(false);
 
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const currencySymbol = CURRENCIES[currency]?.symbol || '$';
+
+  useEffect(() => {
+    if (!isAddModalOpen) return;
+    if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+      const timer = setTimeout(() => {
+        titleInputRef.current?.focus({ preventScroll: true });
+      }, 240);
+      return () => clearTimeout(timer);
+    }
+  }, [isAddModalOpen]);
 
   useEffect(() => {
     if (!isAddModalOpen) return;
 
     if (editingItem) {
+      setIsEditSession(true);
       setType(editingItem.type);
       setTitle(editingItem.title);
       setDay(editingItem.day);
@@ -81,6 +93,7 @@ export const AddItemModal: React.FC = () => {
       setIsCheckOut(editingItem.isCheckOut ?? false);
       setMealType(editingItem.mealType || 'lunch');
     } else {
+      setIsEditSession(false);
       const presetDay = modalPreset?.day ?? activeDay;
       setDay(presetDay);
       setType(modalPreset?.type ?? 'activity');
@@ -108,8 +121,6 @@ export const AddItemModal: React.FC = () => {
       setMealType(modalPreset?.mealType || 'lunch');
     }
   }, [isAddModalOpen, modalPreset, editingItem, activeDay, currentTrip]);
-
-  if (!isAddModalOpen) return null;
 
   const calculatedEnd = addMinutesToTime(start, durationMinutes);
 
@@ -150,7 +161,11 @@ export const AddItemModal: React.FC = () => {
       case 'food': return `${mealType.charAt(0).toUpperCase() + mealType.slice(1)} Break`;
       case 'buffer': return 'Downtime & Rest';
       case 'note': return 'Itinerary Note';
-      default: return 'Planned Activity';
+      case 'activity': return 'Planned Activity';
+      default: {
+        const resolved = resolveCalendarCategory(t, calendarCategories);
+        return resolved.label ? `${resolved.label} Item` : 'Planned Activity';
+      }
     }
   };
 
@@ -160,15 +175,16 @@ export const AddItemModal: React.FC = () => {
   };
 
   return (
-    <div className="modal-backdrop p-3 sm:p-4" onClick={closeAddModal}>
-      <div 
-        className="glass-card w-full max-w-lg h-[90vh] sm:h-[84vh] max-h-[740px] flex flex-col relative border border-white/80 dark:border-white/15 overflow-hidden shadow-2xl p-0"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-black/10 dark:border-white/10 shrink-0 bg-white/70 dark:bg-[#161a22]/80 backdrop-blur-md">
+    <AnimatedModal
+      isOpen={isAddModalOpen}
+      onClose={closeAddModal}
+      backdropClassName="p-3 sm:p-4"
+      panelClassName="glass-card w-full max-w-lg h-[90vh] sm:h-[84vh] max-h-[740px] flex flex-col relative border border-white/80 dark:border-white/15 overflow-hidden shadow-2xl p-0"
+    >
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-black/10 dark:border-white/10 shrink-0 bg-white dark:bg-[#161a22]">
           <div>
             <div className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white leading-tight">
-              {editingItem ? 'Edit Item' : 'Add Item to Schedule'}
+              {isEditSession ? 'Edit Item' : 'Add Item to Schedule'}
             </div>
             <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
               Day {day} Itinerary
@@ -190,15 +206,9 @@ export const AddItemModal: React.FC = () => {
                 Category
               </label>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-              {[
-                { id: 'activity' as ItemType, label: 'Activity', icon: Camera, color: 'text-emerald-500' },
-                { id: 'travel' as ItemType, label: 'Travel', icon: Plane, color: 'text-blue-500' },
-                { id: 'stay' as ItemType, label: 'Stay', icon: Hotel, color: 'text-indigo-500' },
-                { id: 'food' as ItemType, label: 'Food', icon: UtensilsCrossed, color: 'text-amber-500' },
-                { id: 'buffer' as ItemType, label: 'Buffer', icon: Coffee, color: 'text-purple-500' },
-                { id: 'note' as ItemType, label: 'Note', icon: FileText, color: 'text-neutral-500' },
-              ].map((cat) => {
-                const Icon = cat.icon;
+              {calendarCategories.map((cat) => {
+                const Icon = getCalendarCategoryIcon(cat.icon);
+                const catStyle = CALENDAR_COLOR_STYLES[cat.color] || CALENDAR_COLOR_STYLES.slate;
                 const isSelected = type === cat.id;
                 return (
                   <button
@@ -210,13 +220,13 @@ export const AddItemModal: React.FC = () => {
                         setTitle(getDefaultTitleForType(cat.id));
                       }
                     }}
-                    className={`flex flex-col items-center justify-center p-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                    className={`flex flex-col items-center justify-center p-2 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
                       isSelected
-                        ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
-                        : 'bg-white/70 dark:bg-white/5 border-black/10 dark:border-white/10 text-neutral-700 dark:text-neutral-300 hover:border-blue-400'
+                        ? catStyle.selectedModal
+                        : 'bg-white/70 dark:bg-white/5 border-black/10 dark:border-white/10 text-neutral-700 dark:text-neutral-300 hover:border-neutral-300 dark:hover:border-white/25'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 mb-1 ${isSelected ? 'text-white' : cat.color}`} />
+                    <Icon className={`w-4 h-4 mb-1 ${catStyle.iconText}`} />
                     <span className="truncate w-full text-center">{cat.label}</span>
                   </button>
                 );
@@ -229,12 +239,12 @@ export const AddItemModal: React.FC = () => {
               Title
             </label>
             <input
+              ref={titleInputRef}
               type="text"
               required
-              autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Meiji Shrine Morning Walk, Express Train, or Omakase Dinner"
+              placeholder="e.g. Sindhudurg Fort Visit, Ghat Drive, or Malvani Fish Thali"
               style={fieldControlStyle}
               className="input text-sm"
             />
@@ -356,6 +366,11 @@ export const AddItemModal: React.FC = () => {
                 style={fieldControlStyle}
                 className="input text-sm cursor-pointer"
               >
+                {!DURATION_OPTIONS.some((opt) => opt.value === durationMinutes) && (
+                  <option value={durationMinutes}>
+                    {formatDuration(durationMinutes)}
+                  </option>
+                )}
                 {DURATION_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -378,7 +393,7 @@ export const AddItemModal: React.FC = () => {
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g. Ginza, Tokyo"
+                placeholder="e.g. Tarkarli Beach, Malvan"
                 style={fieldControlStyle}
                 className="input text-sm"
               />
@@ -415,7 +430,7 @@ export const AddItemModal: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-3 border-t border-black/10 dark:border-white/10 shrink-0 bg-white/70 dark:bg-[#161a22]/80 backdrop-blur-md">
+        <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-3 border-t border-black/10 dark:border-white/10 shrink-0 bg-white dark:bg-[#161a22]">
             <button
               type="button"
               onClick={closeAddModal}
@@ -427,11 +442,10 @@ export const AddItemModal: React.FC = () => {
               type="submit"
               className="btn-primary text-xs py-2 px-5 cursor-pointer shadow-xs"
             >
-              {editingItem ? 'Save Changes' : 'Add to Schedule'}
+              {isEditSession ? 'Save Changes' : 'Add to Schedule'}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </AnimatedModal>
   );
 };

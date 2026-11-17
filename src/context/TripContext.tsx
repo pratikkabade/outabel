@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Trip, ItineraryItem, ViewScreen, PackingItem } from '../types/trip';
+import { Trip, ItineraryItem, ViewScreen, PackingItem, PackingCategoryColor, PackingCategoryOption, CalendarCategoryOption, CategoryColor } from '../types/trip';
 import { CurrencyCode } from '../utils/currency';
-import { SAMPLE_TRIP } from '../utils/sampleData';
+import { SAMPLE_TRIP, SAMPLE_TRIPS } from '../utils/sampleData';
 import { decodeTripFromHash } from '../utils/share';
 import { getDurationMinutes, addMinutesToTime } from '../utils/time';
+import { DEFAULT_PACKING_CATEGORIES } from '../utils/packingCategories';
+import { DEFAULT_CALENDAR_CATEGORIES } from '../utils/calendarCategories';
+import { ParsedTripImport } from '../utils/tripPackage';
 
 export type CalendarDensity = 'compact' | 'normal' | 'spacious';
 
@@ -23,8 +26,9 @@ interface TripContextType {
     pace: 'relaxed' | 'balanced' | 'packed';
   }) => Trip;
   saveTrip: (trip: Trip) => void;
+  importTripPackage: (pkg: ParsedTripImport, options: { replaceCategories: boolean }) => Trip;
   deleteTrip: (id: string) => void;
-  loadSampleTrip: () => void;
+  loadSampleTrip: (tripId?: string) => void;
   activeDay: number;
   setActiveDay: (day: number) => void;
   addItem: (item: Omit<ItineraryItem, 'id'>) => void;
@@ -49,8 +53,18 @@ interface TripContextType {
   toast: string | null;
   showToast: (msg: string) => void;
   togglePackingItem: (itemId: string) => void;
-  addPackingItem: (text: string, category: PackingItem['category']) => void;
+  addPackingItem: (text: string, category: string) => void;
   deletePackingItem: (itemId: string) => void;
+  packingCategories: PackingCategoryOption[];
+  addPackingCategory: (label: string, color: PackingCategoryColor) => void;
+  updatePackingCategory: (id: string, updates: Partial<Pick<PackingCategoryOption, 'label' | 'color'>>) => void;
+  deletePackingCategory: (id: string) => void;
+  resetPackingCategories: () => void;
+  calendarCategories: CalendarCategoryOption[];
+  addCalendarCategory: (label: string, color: CategoryColor) => void;
+  updateCalendarCategory: (id: string, updates: Partial<Pick<CalendarCategoryOption, 'label' | 'color'>>) => void;
+  deleteCalendarCategory: (id: string) => void;
+  resetCalendarCategories: () => void;
   currency: CurrencyCode;
   setCurrency: (c: CurrencyCode) => void;
   isProfileOpen: boolean;
@@ -67,6 +81,15 @@ const STORAGE_KEY_THEME = 'wayfarer_theme_preference_v1';
 const STORAGE_KEY_CURRENCY = 'wayfarer_currency_v1';
 const STORAGE_KEY_USE12H = 'wayfarer_use12h_v1';
 const STORAGE_KEY_DENSITY = 'wayfarer_calendar_density_v1';
+const STORAGE_KEY_PACKING_CATEGORIES = 'wayfarer_packing_categories_v1';
+const STORAGE_KEY_CALENDAR_CATEGORIES = 'wayfarer_calendar_categories_v1';
+const STORAGE_KEY_TEMPLATES_MIGRATED = 'wayfarer_indian_templates_v2';
+const REMOVED_LEGACY_IDS = new Set([
+  'trip-sample-kyoto-tokyo',
+  'trip-template-mumbai-munnar',
+  'trip-template-delhi-goa',
+]);
+const TEMPLATE_IDS = new Set(SAMPLE_TRIPS.map((t) => t.id));
 
 const TripContext = createContext<TripContextType | undefined>(undefined);
 
@@ -84,12 +107,16 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [currency, setCurrencyState] = useState<CurrencyCode>(() => {
     try {
+      const migrated = localStorage.getItem(STORAGE_KEY_TEMPLATES_MIGRATED);
       const stored = localStorage.getItem(STORAGE_KEY_CURRENCY) as CurrencyCode;
-      if (stored && ['USD', 'EUR', 'GBP', 'JPY', 'INR', 'AUD', 'CAD'].includes(stored)) {
+      if (!migrated && (!stored || stored === 'USD')) {
+        return 'INR';
+      }
+      if (stored && ['USD', 'EUR', 'GBP', 'JPY', 'INR'].includes(stored)) {
         return stored;
       }
     } catch {}
-    return 'USD';
+    return 'INR';
   });
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -112,6 +139,44 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
     return 'normal';
   });
+
+  const [packingCategories, setPackingCategories] = useState<PackingCategoryOption[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_PACKING_CATEGORIES);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_PACKING_CATEGORIES;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_PACKING_CATEGORIES, JSON.stringify(packingCategories));
+    } catch {}
+  }, [packingCategories]);
+
+  const [calendarCategories, setCalendarCategories] = useState<CalendarCategoryOption[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_CALENDAR_CATEGORIES);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_CALENDAR_CATEGORIES;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_CALENDAR_CATEGORIES, JSON.stringify(calendarCategories));
+    } catch {}
+  }, [calendarCategories]);
 
   const setUse12h = useCallback((val: boolean) => {
     setUse12hState(val);
@@ -137,18 +202,30 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [trips, setTrips] = useState<Trip[]>(() => {
     const fromHash = decodeTripFromHash();
     if (fromHash) {
-      return [fromHash, SAMPLE_TRIP];
+      return [fromHash, ...SAMPLE_TRIPS];
     }
     try {
+      const migrated = localStorage.getItem(STORAGE_KEY_TEMPLATES_MIGRATED);
       const stored = localStorage.getItem(STORAGE_KEY_TRIPS);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+        if (Array.isArray(parsed)) {
+          const customTrips = parsed.filter(
+            (t: Trip) => t && !REMOVED_LEGACY_IDS.has(t.id) && !TEMPLATE_IDS.has(t.id)
+          );
+          if (!migrated) {
+            localStorage.setItem(STORAGE_KEY_TEMPLATES_MIGRATED, 'true');
+            return [...SAMPLE_TRIPS, ...customTrips];
+          }
+          const cleaned = parsed.filter((t: Trip) => t && !REMOVED_LEGACY_IDS.has(t.id));
+          if (cleaned.length > 0) {
+            return cleaned;
+          }
         }
       }
+      localStorage.setItem(STORAGE_KEY_TEMPLATES_MIGRATED, 'true');
     } catch {}
-    return [SAMPLE_TRIP];
+    return SAMPLE_TRIPS;
   });
 
   const [currentTripId, setCurrentTripId] = useState<string | null>(() => {
@@ -156,7 +233,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (fromHash) return fromHash.id;
     try {
       const stored = localStorage.getItem(STORAGE_KEY_ACTIVE);
-      if (stored) return stored;
+      if (stored && !REMOVED_LEGACY_IDS.has(stored)) return stored;
     } catch {}
     return SAMPLE_TRIP.id;
   });
@@ -325,16 +402,33 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [currentTripId, showToast]
   );
 
-  const loadSampleTrip = useCallback(() => {
+  const loadSampleTrip = useCallback((tripId?: string) => {
+    if (tripId) {
+      const target = SAMPLE_TRIPS.find((t) => t.id === tripId) || SAMPLE_TRIP;
+      setTrips((prev) => {
+        const cleaned = prev.filter((t) => !REMOVED_LEGACY_IDS.has(t.id));
+        const exists = cleaned.some((t) => t.id === target.id);
+        return exists ? cleaned : [target, ...cleaned];
+      });
+      setCurrentTripId(target.id);
+      setActiveDay(1);
+      setScreen('planner');
+      showToast(`Loaded "${target.title}".`);
+      return;
+    }
+
     setTrips((prev) => {
-      const exists = prev.find((t) => t.id === SAMPLE_TRIP.id);
-      if (exists) return prev;
-      return [SAMPLE_TRIP, ...prev];
+      const customOnly = prev.filter(
+        (t) => !REMOVED_LEGACY_IDS.has(t.id) && !TEMPLATE_IDS.has(t.id)
+      );
+      return [...SAMPLE_TRIPS, ...customOnly];
     });
-    setCurrentTripId(SAMPLE_TRIP.id);
+    setCurrentTripId((prevId) =>
+      prevId && !REMOVED_LEGACY_IDS.has(prevId) ? prevId : SAMPLE_TRIP.id
+    );
     setActiveDay(1);
-    setScreen('planner');
-    showToast('Loaded Kyoto & Tokyo itinerary.');
+    setScreen('trips');
+    showToast('Loaded 3 curated India trip templates.');
   }, [showToast, setScreen]);
 
   const addItem = useCallback(
@@ -495,7 +589,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const addPackingItem = useCallback(
-    (text: string, category: PackingItem['category']) => {
+    (text: string, category: string) => {
       if (!currentTrip || !text.trim()) return;
       const list = currentTrip.packingList || [];
       const newItem: PackingItem = {
@@ -520,6 +614,122 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveTrip(updatedTrip);
     },
     [currentTrip, saveTrip]
+  );
+
+  const addPackingCategory = useCallback(
+    (label: string, color: PackingCategoryColor) => {
+      const trimmed = label.trim();
+      if (!trimmed) return;
+      const idBase = trimmed
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      const uniqueId = `${idBase || 'category'}_${Date.now().toString(36).slice(-4)}`;
+      setPackingCategories((prev) => [...prev, { id: uniqueId, label: trimmed, color }]);
+      showToast(`Added packing category "${trimmed}"`);
+    },
+    [showToast]
+  );
+
+  const updatePackingCategory = useCallback(
+    (id: string, updates: Partial<Pick<PackingCategoryOption, 'label' | 'color'>>) => {
+      setPackingCategories((prev) =>
+        prev.map((cat) => (cat.id === id ? { ...cat, ...updates } : cat))
+      );
+    },
+    []
+  );
+
+  const deletePackingCategory = useCallback(
+    (id: string) => {
+      setPackingCategories((prev) => {
+        if (prev.length <= 1) return prev;
+        return prev.filter((cat) => cat.id !== id);
+      });
+      showToast('Removed packing category');
+    },
+    [showToast]
+  );
+
+  const resetPackingCategories = useCallback(() => {
+    setPackingCategories(DEFAULT_PACKING_CATEGORIES);
+    showToast('Reset packing categories to default');
+  }, [showToast]);
+
+  const addCalendarCategory = useCallback(
+    (label: string, color: CategoryColor) => {
+      const trimmed = label.trim();
+      if (!trimmed) return;
+      const idBase = trimmed
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      const uniqueId = `${idBase || 'category'}_${Date.now().toString(36).slice(-4)}`;
+      setCalendarCategories((prev) => [
+        ...prev,
+        { id: uniqueId, label: trimmed, color, icon: 'tag' },
+      ]);
+      showToast(`Added calendar category "${trimmed}"`);
+    },
+    [showToast]
+  );
+
+  const updateCalendarCategory = useCallback(
+    (id: string, updates: Partial<Pick<CalendarCategoryOption, 'label' | 'color'>>) => {
+      setCalendarCategories((prev) =>
+        prev.map((cat) => (cat.id === id ? { ...cat, ...updates } : cat))
+      );
+    },
+    []
+  );
+
+  const deleteCalendarCategory = useCallback(
+    (id: string) => {
+      setCalendarCategories((prev) => {
+        if (prev.length <= 1) return prev;
+        return prev.filter((cat) => cat.id !== id);
+      });
+      showToast('Removed calendar category');
+    },
+    [showToast]
+  );
+
+  const resetCalendarCategories = useCallback(() => {
+    setCalendarCategories(DEFAULT_CALENDAR_CATEGORIES);
+    showToast('Reset calendar categories to default');
+  }, [showToast]);
+
+  const importTripPackage = useCallback(
+    (pkg: ParsedTripImport, options: { replaceCategories: boolean }) => {
+      if (options.replaceCategories) {
+        if (pkg.calendarCategories.length > 0) {
+          setCalendarCategories(pkg.calendarCategories);
+        }
+        if (pkg.packingCategories.length > 0) {
+          setPackingCategories(pkg.packingCategories);
+        }
+      }
+
+      const importedTrip: Trip = {
+        ...pkg.trip,
+        id: `trip-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setTrips((prev) => [importedTrip, ...prev]);
+      setCurrentTripId(importedTrip.id);
+      setActiveDay(1);
+      setHistory([]);
+      setHistoryIndex(-1);
+      showToast(
+        options.replaceCategories
+          ? `Imported "${importedTrip.title}" and updated categories`
+          : `Imported "${importedTrip.title}" (${importedTrip.items.length} events)`
+      );
+      return importedTrip;
+    },
+    [showToast]
   );
 
   useEffect(() => {
@@ -555,6 +765,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentTrip,
         createTrip,
         saveTrip,
+        importTripPackage,
         deleteTrip,
         loadSampleTrip,
         activeDay,
@@ -583,6 +794,16 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
         togglePackingItem,
         addPackingItem,
         deletePackingItem,
+        packingCategories,
+        addPackingCategory,
+        updatePackingCategory,
+        deletePackingCategory,
+        resetPackingCategories,
+        calendarCategories,
+        addCalendarCategory,
+        updateCalendarCategory,
+        deleteCalendarCategory,
+        resetCalendarCategories,
         currency,
         setCurrency,
         isProfileOpen,

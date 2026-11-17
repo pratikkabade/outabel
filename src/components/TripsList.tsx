@@ -7,12 +7,13 @@ import {
   Copy, 
   Download 
 } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import { useTrip } from '../context/TripContext';
 import { downloadICS } from '../utils/ics';
 import { formatCurrency } from '../utils/currency';
 
 export const TripsList: React.FC = () => {
-  const { trips, currentTrip, setCurrentTrip, deleteTrip, setScreen, showToast, saveTrip, currency } = useTrip();
+  const { trips, currentTrip, setCurrentTrip, deleteTrip, setScreen, showToast, saveTrip, currency, loadSampleTrip } = useTrip();
 
   const handleDuplicate = (tripToCopy: typeof trips[0]) => {
     const copied = {
@@ -29,7 +30,7 @@ export const TripsList: React.FC = () => {
   return (
     <div className="relative z-10 w-full min-h-[calc(100vh-65px)] pb-24">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
               My Saved Trips
@@ -39,14 +40,24 @@ export const TripsList: React.FC = () => {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setScreen('wizard')}
-            className="btn-primary text-xs py-2 px-3.5 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Plan New Trip</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => loadSampleTrip()}
+              className="btn-ghost text-xs py-2 px-3.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restore 3 Templates</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setScreen('wizard')}
+              className="btn-primary text-xs py-2 px-3.5 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Plan New Trip</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

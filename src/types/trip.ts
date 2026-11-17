@@ -1,4 +1,4 @@
-export type ItemType = 'travel' | 'stay' | 'activity' | 'food' | 'buffer' | 'note';
+export type ItemType = string;
 
 export type TravelMode = 'flight' | 'train' | 'car' | 'bus' | 'ferry' | 'walk' | 'rideshare';
 
@@ -31,10 +31,44 @@ export interface TripPreferences {
   pace: TripPace;
 }
 
+export type CategoryColor =
+  | 'blue'
+  | 'indigo'
+  | 'emerald'
+  | 'amber'
+  | 'rose'
+  | 'purple'
+  | 'sky'
+  | 'slate';
+
+export type PackingCategoryColor = CategoryColor;
+
+export type CalendarCategoryIcon =
+  | 'plane'
+  | 'hotel'
+  | 'utensils'
+  | 'camera'
+  | 'coffee'
+  | 'file'
+  | 'tag';
+
+export interface CalendarCategoryOption {
+  id: string;
+  label: string;
+  color: CategoryColor;
+  icon?: CalendarCategoryIcon;
+}
+
+export interface PackingCategoryOption {
+  id: string;
+  label: string;
+  color: CategoryColor;
+}
+
 export interface PackingItem {
   id: string;
   text: string;
-  category: 'essentials' | 'clothing' | 'toiletries' | 'electronics' | 'documents';
+  category: string;
   packed: boolean;
 }
 

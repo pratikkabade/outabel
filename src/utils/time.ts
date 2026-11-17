@@ -44,6 +44,16 @@ export const getDayDate = (startDateStr: string, dayIndex: number): Date => {
   return baseDate;
 };
 
+export const shiftIsoDate = (dateStr: string, deltaDays: number): string => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year || 2026, (month || 1) - 1, day || 1);
+  date.setDate(date.getDate() + deltaDays);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 export const formatDayDate = (startDateStr: string, dayIndex: number): string => {
   try {
     const date = getDayDate(startDateStr, dayIndex);

@@ -1,11 +1,5 @@
 import React from 'react';
 import { 
-  Plane, 
-  Hotel, 
-  Camera, 
-  UtensilsCrossed, 
-  Coffee, 
-  FileText, 
   MapPin, 
   Trash2, 
   Copy, 
@@ -19,6 +13,7 @@ import { useTrip } from '../context/TripContext';
 import { openGoogleCalendar } from '../utils/gcal';
 import { formatDuration, getDurationMinutes } from '../utils/time';
 import { formatCurrency } from '../utils/currency';
+import { resolveCalendarCategory } from '../utils/calendarCategories';
 
 interface ItemCardProps {
   item: ItineraryItem;
@@ -29,53 +24,10 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   item,
   conflictWarning,
 }) => {
-  const { openAddModal, deleteItem, duplicateItem, currentTrip, currency } = useTrip();
+  const { openAddModal, deleteItem, duplicateItem, currentTrip, calendarCategories, currency } = useTrip();
 
   const durationMin = getDurationMinutes(item.start, item.end);
-
-  const getTypeVisuals = () => {
-    switch (item.type) {
-      case 'travel':
-        return {
-          icon: Plane,
-          cardBg: 'bg-blue-500/[0.08] dark:bg-blue-950/25 border-blue-500/25 hover:border-blue-500/40',
-          badgeBg: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25',
-        };
-      case 'stay':
-        return {
-          icon: Hotel,
-          cardBg: 'bg-indigo-500/[0.08] dark:bg-indigo-950/25 border-indigo-500/25 hover:border-indigo-500/40',
-          badgeBg: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/25',
-        };
-      case 'food':
-        return {
-          icon: UtensilsCrossed,
-          cardBg: 'bg-amber-500/[0.08] dark:bg-amber-950/25 border-amber-500/25 hover:border-amber-500/40',
-          badgeBg: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25',
-        };
-      case 'buffer':
-        return {
-          icon: Coffee,
-          cardBg: 'bg-purple-500/[0.08] dark:bg-purple-950/25 border-purple-500/25 hover:border-purple-500/40',
-          badgeBg: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25',
-        };
-      case 'note':
-        return {
-          icon: FileText,
-          cardBg: 'bg-neutral-500/[0.08] dark:bg-neutral-900/35 border-neutral-500/25 hover:border-neutral-500/40',
-          badgeBg: 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-300 border-neutral-500/25',
-        };
-      default:
-        return {
-          icon: Camera,
-          cardBg: 'bg-emerald-500/[0.08] dark:bg-emerald-950/25 border-emerald-500/25 hover:border-emerald-500/40',
-          badgeBg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25',
-        };
-    }
-  };
-
-  const visuals = getTypeVisuals();
-  const Icon = visuals.icon;
+  const { style, icon: Icon } = resolveCalendarCategory(item.type, calendarCategories);
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData('text/plain', item.id);
@@ -92,7 +44,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
       )}
 
       <div 
-        className={`p-3.5 sm:p-4 rounded-2xl border backdrop-blur-xl transition-all shadow-xs ${visuals.cardBg} ${
+        className={`p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl transition-all shadow-xs ${style.bg} ${style.hoverBg} ${style.border} ${
           conflictWarning ? 'ring-1 ring-amber-500/60' : ''
         }`}
       >
@@ -107,7 +59,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
               <GripVertical className="w-4 h-4" />
             </div>
 
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 ${visuals.badgeBg}`}>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${style.badge}`}>
               <Icon className="w-4 h-4" />
             </div>
 

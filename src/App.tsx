@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import { TripProvider, useTrip } from './context/TripContext';
 import { Navbar } from './components/Navbar';
 import { Home } from './components/Home';
@@ -12,8 +12,14 @@ import { ProfileModal } from './components/ProfileModal';
 const MainContent: React.FC = () => {
   const { screen, toast } = useTrip();
 
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [screen]);
+
   return (
-    <div className={`relative flex flex-col ${screen === 'planner' ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
+    <div className={`relative flex flex-col ${screen === 'planner' ? 'h-[100dvh] overflow-hidden' : 'min-h-[100dvh]'}`}>
       <div className="mesh-canvas" />
       <Navbar />
 

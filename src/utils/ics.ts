@@ -34,7 +34,7 @@ export const generateICSFile = (trip: Trip): string => {
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Outabel//Liquid Glass Trip Planner//EN',
+    'PRODID:-//Outabel//The Trip Planner//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeICSText(trip.title)}`,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   ArrowRight, 
   ArrowLeft, 
@@ -9,17 +9,38 @@ import {
   Gauge, 
   Check, 
   Sun,
-  Coffee
+  Coffee,
+  Upload,
+  FileArchive,
+  FileJson,
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 import { useTrip } from '../context/TripContext';
 import { TripPace } from '../types/trip';
+import {
+  CategoryDiffResult,
+  compareCategoriesWithWorkspace,
+  ParsedTripImport,
+  parseTripImportFile,
+} from '../utils/tripPackage';
+import { CALENDAR_COLOR_STYLES } from '../utils/calendarCategories';
+
+type WizardMode = 'choose' | 'steps' | 'import-warning';
 
 export const Wizard: React.FC = () => {
-  const { createTrip, setScreen } = useTrip();
+  const {
+    createTrip,
+    setScreen,
+    calendarCategories,
+    packingCategories,
+    importTripPackage,
+  } = useTrip();
 
+  const [mode, setMode] = useState<WizardMode>('choose');
   const [step, setStep] = useState<number>(0);
-  const [from, setFrom] = useState<string>('San Francisco');
-  const [to, setTo] = useState<string>('Tokyo & Kyoto, Japan');
+  const [from, setFrom] = useState<string>('Pune');
+  const [to, setTo] = useState<string>('Malvan, Konkan');
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() + 14);
@@ -30,7 +51,56 @@ export const Wizard: React.FC = () => {
   const [dailyStartTime, setDailyStartTime] = useState<string>('09:00');
   const [pace, setPace] = useState<TripPace>('balanced');
 
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [pendingImport, setPendingImport] = useState<ParsedTripImport | null>(null);
+  const [categoryDiff, setCategoryDiff] = useState<CategoryDiffResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const totalSteps = 7;
+
+  const handleImportFile = async (file: File | undefined | null) => {
+    if (!file) return;
+    setImportError(null);
+    setIsImporting(true);
+
+    try {
+      const parsed = await parseTripImportFile(file);
+      const diff = compareCategoriesWithWorkspace(
+        parsed.calendarCategories,
+        calendarCategories,
+        parsed.packingCategories,
+        packingCategories
+      );
+
+      if (diff.hasDifferences) {
+        setPendingImport(parsed);
+        setCategoryDiff(diff);
+        setMode('import-warning');
+      } else {
+        importTripPackage(parsed, { replaceCategories: false });
+        setScreen('planner');
+      }
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : 'Unable to read that file. Please upload an exported .json or .zip file.'
+      );
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleConfirmImport = (replaceCategories: boolean) => {
+    if (!pendingImport) return;
+    importTripPackage(pendingImport, { replaceCategories });
+    setPendingImport(null);
+    setCategoryDiff(null);
+    setScreen('planner');
+  };
 
   const handleNext = () => {
     if (step < totalSteps - 1) {
@@ -53,7 +123,7 @@ export const Wizard: React.FC = () => {
     if (step > 0) {
       setStep((prev) => prev - 1);
     } else {
-      setScreen('home');
+      setMode('choose');
     }
   };
 
@@ -63,6 +133,225 @@ export const Wizard: React.FC = () => {
       handleNext();
     }
   };
+
+  if (mode === 'choose') {
+    return (
+      <div className="relative z-10 w-full min-h-[calc(100vh-65px)] flex flex-col items-center justify-center p-4 sm:p-6 pb-20">
+        <div className="w-full max-w-2xl mx-auto">
+          <div className="glass-card p-6 sm:p-9 border border-black/10 dark:border-white/10">
+            <div className="mb-7">
+              <div className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1.5">
+                New Trip Setup
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+                How would you like to start?
+              </h1>
+              <p className="text-sm text-neutral-600 dark:text-neutral-300 mt-1.5">
+                Build a fresh itinerary step-by-step or import an exported .json / .zip package with your events, categories, colors, and packing checklist.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Option 1: Step-by-step Wizard */}
+              <button
+                type="button"
+                onClick={() => {
+                  setImportError(null);
+                  setStep(0);
+                  setMode('steps');
+                }}
+                className="p-5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/75 dark:bg-white/[0.04] hover:border-blue-400 dark:hover:border-blue-400/60 hover:bg-blue-50/40 dark:hover:bg-blue-500/10 text-left transition-colors flex flex-col justify-between gap-5 cursor-pointer group"
+              >
+                <div>
+                  <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-base font-bold text-neutral-900 dark:text-white">
+                    Create Step-by-Step
+                  </h2>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5 leading-relaxed">
+                    Set your departure, destination, dates, wake-up routine, and pace in 7 quick steps.
+                  </p>
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                  <span>Start Step 1</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+              </button>
+
+              {/* Option 2: Import from .zip / .json */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingFile(true);
+                }}
+                onDragLeave={() => setIsDraggingFile(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingFile(false);
+                  const file = e.dataTransfer.files?.[0];
+                  handleImportFile(file);
+                }}
+                onClick={() => !isImporting && fileInputRef.current?.click()}
+                className={`p-5 rounded-2xl border text-left transition-colors flex flex-col justify-between gap-5 cursor-pointer ${
+                  isDraggingFile
+                    ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/15'
+                    : 'border-black/10 dark:border-white/10 bg-white/75 dark:bg-white/[0.04] hover:border-emerald-400 dark:hover:border-emerald-400/60 hover:bg-emerald-50/40 dark:hover:bg-emerald-500/10'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,.zip,application/json,application/zip"
+                  className="hidden"
+                  onChange={(e) => handleImportFile(e.target.files?.[0])}
+                />
+
+                <div>
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4">
+                    <FileArchive className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-base font-bold text-neutral-900 dark:text-white">
+                    Import from .zip / .json
+                  </h2>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5 leading-relaxed">
+                    Select or drop an exported Outabel file to load all trip events, categories, colors, and packing items automatically.
+                  </p>
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{isImporting ? 'Reading file...' : 'Choose .zip or .json file'}</span>
+                </div>
+              </div>
+            </div>
+
+            {importError && (
+              <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{importError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-6 mt-6 border-t border-black/10 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => setScreen('home')}
+                className="btn-ghost text-xs cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Home</span>
+              </button>
+
+              <div className="flex items-center gap-2 text-[11px] text-neutral-400">
+                <FileJson className="w-3.5 h-3.5" />
+                <span>Supports .json &amp; .zip exports</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'import-warning' && pendingImport && categoryDiff) {
+    return (
+      <div className="relative z-10 w-full min-h-[calc(100vh-65px)] flex flex-col items-center justify-center p-4 sm:p-6 pb-20">
+        <div className="w-full max-w-xl mx-auto">
+          <div className="glass-card p-6 sm:p-8 border border-black/10 dark:border-white/10 space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-neutral-900 dark:text-white">
+                  Replace Categories &amp; Colors?
+                </h2>
+                <p className="text-xs text-neutral-600 dark:text-neutral-300 mt-1 leading-relaxed">
+                  The imported file contains category names or colors that differ from your current workspace settings. Choose whether to replace your categories before importing the trip.
+                </p>
+              </div>
+            </div>
+
+            {/* Parsed Trip Preview */}
+            <div className="p-3.5 rounded-2xl bg-black/[0.025] dark:bg-white/[0.04] border border-black/8 dark:border-white/10 space-y-1">
+              <div className="text-sm font-bold text-neutral-900 dark:text-white">
+                {pendingImport.trip.title}
+              </div>
+              <div className="text-xs text-neutral-500 dark:text-neutral-400 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span>{pendingImport.trip.from} → {pendingImport.trip.to}</span>
+                <span>·</span>
+                <span>{pendingImport.trip.numDays} days</span>
+                <span>·</span>
+                <span>{pendingImport.trip.items.length} events</span>
+                <span>·</span>
+                <span>{pendingImport.trip.packingList?.length || 0} packing items</span>
+              </div>
+            </div>
+
+            {/* Category & Color Differences */}
+            <div className="p-3.5 rounded-2xl bg-amber-500/[0.07] dark:bg-amber-500/10 border border-amber-500/25 space-y-2">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                Detected Differences ({categoryDiff.items.length})
+              </div>
+              <ul className="space-y-1.5 max-h-44 overflow-y-auto pr-1 day-items-scroll">
+                {categoryDiff.items.map((diff, idx) => {
+                  const swatch = diff.toColor
+                    ? CALENDAR_COLOR_STYLES[diff.toColor]?.swatch
+                    : diff.fromColor
+                    ? CALENDAR_COLOR_STYLES[diff.fromColor]?.swatch
+                    : 'bg-neutral-400';
+
+                  return (
+                    <li
+                      key={idx}
+                      className="text-xs text-neutral-700 dark:text-neutral-200 flex items-center gap-2"
+                    >
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${swatch}`} />
+                      <span>{diff.message}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-black/10 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingImport(null);
+                  setCategoryDiff(null);
+                  setMode('choose');
+                }}
+                className="btn-ghost text-xs py-2 px-3.5 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Cancel</span>
+              </button>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleConfirmImport(false)}
+                  className="px-3.5 py-2 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 text-xs font-medium text-neutral-800 dark:text-neutral-200 transition-colors cursor-pointer"
+                >
+                  Keep Current Categories
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmImport(true)}
+                  className="btn-primary text-xs py-2 px-4 cursor-pointer shadow-xs"
+                >
+                  Replace Categories &amp; Import
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative z-10 w-full min-h-[calc(100vh-65px)] flex flex-col items-center justify-center p-4 sm:p-6 pb-20">
@@ -102,12 +391,12 @@ export const Wizard: React.FC = () => {
                   autoFocus
                   value={from}
                   onChange={(e) => setFrom(e.target.value)}
-                  placeholder="e.g. San Francisco (SFO), London, New York"
+                  placeholder="e.g. Sangli, Pune, Mumbai, Bengaluru, New Delhi"
                   className="input text-lg py-3 px-4"
                 />
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
-                {['San Francisco', 'New York', 'London', 'Tokyo', 'Sydney', 'Paris'].map((city) => (
+                {['Sangli', 'Bengaluru', 'Pune', 'Mumbai', 'New Delhi', 'Hyderabad'].map((city) => (
                   <button
                     key={city}
                     type="button"
@@ -140,12 +429,12 @@ export const Wizard: React.FC = () => {
                   autoFocus
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
-                  placeholder="e.g. Kyoto & Tokyo, Japan or Amalfi Coast, Italy"
+                  placeholder="e.g. Malvan, Puducherry, Tirupati, Mahabalipuram"
                   className="input text-lg py-3 px-4"
                 />
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
-                {['Tokyo, Japan', 'Paris, France', 'Rome & Florence', 'Reykjavik, Iceland', 'Kyoto & Osaka'].map((dest) => (
+                {['Malvan, Konkan', 'Puducherry', 'Tirupati, AP', 'Auroville', 'Mahabalipuram'].map((dest) => (
                   <button
                     key={dest}
                     type="button"

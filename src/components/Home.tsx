@@ -10,12 +10,13 @@ import {
   Layers, 
   Zap, 
   Share2, 
-  Plane, 
+  Car, 
   Hotel, 
   UtensilsCrossed 
 } from 'lucide-react';
 import { useTrip } from '../context/TripContext';
 import { formatCurrency } from '../utils/currency';
+import { SAMPLE_TRIPS } from '../utils/sampleData';
 
 export const Home: React.FC = () => {
   const { setScreen, loadSampleTrip, currency } = useTrip();
@@ -54,8 +55,21 @@ export const Home: React.FC = () => {
                 onClick={() => loadSampleTrip()}
                 className="btn-ghost text-base py-3 px-6 rounded-2xl cursor-pointer"
               >
-                <span>Explore Kyoto & Tokyo Sample</span>
+                <span>Browse 3 India Templates</span>
               </button>
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center lg:justify-start gap-2">
+              {SAMPLE_TRIPS.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => loadSampleTrip(tpl.id)}
+                  className="chip text-xs py-1 px-2.5 cursor-pointer hover:border-blue-400 transition-colors"
+                >
+                  <span>{tpl.from.split(',')[0].split(' (')[0]} → {tpl.to.split(',')[0].split(' & ')[0]} ({tpl.numDays}d)</span>
+                </button>
+              ))}
             </div>
 
             <div className="mt-10 flex items-center justify-center lg:justify-start gap-6 text-xs text-neutral-500 dark:text-neutral-400">
@@ -80,8 +94,8 @@ export const Home: React.FC = () => {
             <div className="glass-card p-6 sm:p-8 relative overflow-hidden border border-black/10 dark:border-white/10 shadow-lg">
               <div className="flex items-center justify-between pb-5 border-b border-black/5 dark:border-white/10 mb-6">
                 <div>
-                  <div className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Day 1 of 5 · Sunday, Apr 12</div>
-                  <div className="text-lg font-bold text-neutral-900 dark:text-white">Tokyo Arrival & Ginza Evening</div>
+                  <div className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Day 1 of 4 · Friday, Dec 4</div>
+                  <div className="text-lg font-bold text-neutral-900 dark:text-white">Sangli to Malvan Coastal Drive</div>
                 </div>
                 <div className="chip text-xs">
                   <span>Balanced Pace</span>
@@ -91,14 +105,14 @@ export const Home: React.FC = () => {
               <div className="space-y-3.5">
                 <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-white/5 border border-black/5 dark:border-white/10 flex items-start gap-3.5 shadow-xs">
                   <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                    <Plane className="w-4.5 h-4.5" />
+                    <Car className="w-4.5 h-4.5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">Flight UA837 to Tokyo Haneda</div>
-                      <span className="text-xs font-mono tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0">11:00 – 14:30</span>
+                      <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">Phonda Ghat Drive to Tarkarli</div>
+                      <span className="text-xs font-mono tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0">08:45 – 12:00</span>
                     </div>
-                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">Haneda Airport Terminal 3 · SFO → HND</div>
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">Kolhapur → Malvan via Radhanagari &amp; Kasal</div>
                   </div>
                 </div>
 
@@ -108,10 +122,10 @@ export const Home: React.FC = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">Check-in: Hotel Celestine Ginza</div>
-                      <span className="text-xs font-mono tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0">16:00 – 16:45</span>
+                      <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">Check-in: Tarkarli Beachfront Resort</div>
+                      <span className="text-xs font-mono tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0">12:15 – 13:00</span>
                     </div>
-                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">Chuo City, Tokyo · High floor reserved</div>
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">Tarkarli, Malvan · Bill settled at check-out</div>
                   </div>
                 </div>
 
@@ -121,10 +135,10 @@ export const Home: React.FC = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">Tasting Dinner at Ginza Kagari</div>
-                      <span className="text-xs font-mono tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0">18:30 – 20:00</span>
+                      <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">Malvani Surmai Thali at Chaitanya</div>
+                      <span className="text-xs font-mono tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0">13:30 – 14:45</span>
                     </div>
-                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">Ginza 6-4-12 · Signature chicken paitan ramen</div>
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">Malvan Town · Amboli, Solkadhi &amp; fresh catch</div>
                   </div>
                 </div>
               </div>
@@ -135,7 +149,7 @@ export const Home: React.FC = () => {
                   <span>Timeline harmonized · No schedule conflicts</span>
                 </span>
                 <span className="font-mono tabular-nums font-semibold text-neutral-900 dark:text-neutral-100">
-                  Est. {formatCurrency(1175, currency)}
+                  Day 1 Est. {formatCurrency(2300, currency)}
                 </span>
               </div>
             </div>
@@ -263,7 +277,7 @@ export const Home: React.FC = () => {
                 onClick={() => loadSampleTrip()}
                 className="btn-ghost text-base py-3 px-8 rounded-2xl cursor-pointer"
               >
-                <span>Open Sample Itinerary</span>
+                <span>Open Sample Itineraries</span>
               </button>
             </div>
           </div>
@@ -273,7 +287,6 @@ export const Home: React.FC = () => {
       <footer className="max-w-6xl mx-auto px-6 pt-12 pb-6 border-t border-black/5 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-500 dark:text-neutral-400">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-neutral-800 dark:text-neutral-200">Outabel</span>
-          <span>— Liquid Glass Trip Planner</span>
         </div>
         <div className="flex items-center gap-4">
           <span>Private & Offline LocalStorage</span>

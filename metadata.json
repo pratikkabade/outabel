@@ -1,6 +1,6 @@
 {
-  "name": "Wayfarer - Liquid Glass Trip Planner",
-  "description": "Apple-style liquid glass trip itinerary planner featuring fluid horizontal timelines, rule-based smart suggestions, and instant calendar export.",
+  "name": "Wayfarer - The Trip Planner",
+  "description": "The trip itinerary planner featuring fluid horizontal timelines, rule-based smart suggestions, and instant calendar export.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
