@@ -17,6 +17,7 @@ import {
 import { useTrip } from '../context/TripContext';
 import { formatCurrency } from '../utils/currency';
 import { SAMPLE_TRIPS } from '../utils/sampleData';
+import { OutabelLogo } from './OutabelLogo';
 
 export const Home: React.FC = () => {
   const { setScreen, loadSampleTrip, currency } = useTrip();
@@ -26,10 +27,16 @@ export const Home: React.FC = () => {
       <section id="overview" className="max-w-6xl mx-auto px-6 pt-16 md:pt-24 pb-20">
         <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
           <div className="flex-1 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase text-blue-600 dark:text-blue-400 mb-4">
-              <span>Next-Generation Travel Design</span>
-              <span aria-hidden="true">·</span>
-              <span>100% Offline & Private</span>
+            <div className="inline-flex items-center gap-3.5 mb-5">
+              <OutabelLogo className="w-12 h-12 sm:w-14 sm:h-14 drop-shadow-md" />
+              <div className="text-left">
+                <div className="text-lg sm:text-xl font-bold tracking-tight text-neutral-900 dark:text-white leading-none">
+                  Outabel
+                </div>
+                <div className="text-[11px] font-semibold tracking-wide uppercase text-blue-600 dark:text-blue-400 mt-1">
+                  Next-Generation Travel Design · 100% Offline
+                </div>
+              </div>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-neutral-900 dark:text-neutral-50 leading-[1.08] mb-6">
@@ -257,6 +264,7 @@ export const Home: React.FC = () => {
       <section className="max-w-4xl mx-auto px-6 py-20 text-center">
         <div className="glass-card p-10 sm:p-14 border border-black/5 dark:border-white/10 relative overflow-hidden">
           <div className="max-w-xl mx-auto">
+            <OutabelLogo className="w-14 h-14 mx-auto mb-5 drop-shadow-md" />
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-900 dark:text-white mb-4">
               Begin planning your next journey now.
             </h2>
@@ -286,6 +294,7 @@ export const Home: React.FC = () => {
 
       <footer className="max-w-6xl mx-auto px-6 pt-12 pb-6 border-t border-black/5 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-500 dark:text-neutral-400">
         <div className="flex items-center gap-2">
+          <OutabelLogo className="w-6 h-6" />
           <span className="font-semibold text-neutral-800 dark:text-neutral-200">Outabel</span>
         </div>
         <div className="flex items-center gap-4">

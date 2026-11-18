@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { Compass } from 'lucide-react';
 import { useTrip } from '../context/TripContext';
+import { OutabelLogo } from './OutabelLogo';
 
 export const Navbar: React.FC = () => {
   const { 
@@ -34,15 +34,16 @@ export const Navbar: React.FC = () => {
     <>
       <header
         ref={headerRef}
-        className="fixed top-0 left-0 right-0 z-40 w-full glass-sticky border-b border-black/5 dark:border-white/10 transition-colors"
+        className="fixed top-0 left-0 right-0 z-40 w-full glass-sticky border-b border-black/5 dark:border-white/10"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 transition-opacity text-left">
             <button
               type="button"
               onClick={() => setScreen('home')}
-              className="w-8 h-8 rounded-xl hover:opacity-85 cursor-pointer bg-blue-500 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-              <Compass className="w-4.5 h-4.5" />
+              aria-label="Outabel Home"
+              className="rounded-xl hover:opacity-90 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0">
+              <OutabelLogo className="w-8 h-8" />
             </button>
             <div className="flex flex-col min-w-0">
               <span className="text-sm font-bold tracking-tight text-neutral-900 dark:text-neutral-100 leading-tight">

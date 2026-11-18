@@ -25,6 +25,7 @@ import {
   parseTripImportFile,
 } from '../utils/tripPackage';
 import { CALENDAR_COLOR_STYLES } from '../utils/calendarCategories';
+import { OutabelLogo } from './OutabelLogo';
 
 type WizardMode = 'choose' | 'steps' | 'import-warning';
 
@@ -140,6 +141,7 @@ export const Wizard: React.FC = () => {
         <div className="w-full max-w-2xl mx-auto">
           <div className="glass-card p-6 sm:p-9 border border-black/10 dark:border-white/10">
             <div className="mb-7">
+              <OutabelLogo className="w-11 h-11 mb-4 drop-shadow-sm" />
               <div className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1.5">
                 New Trip Setup
               </div>

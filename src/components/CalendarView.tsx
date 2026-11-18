@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Calendar as CalendarIcon, 
   CalendarPlus,
@@ -52,6 +52,20 @@ export const CalendarView: React.FC = () => {
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const [batchProgress, setBatchProgress] = useState(0);
+  const [expandedTopAction, setExpandedTopAction] = useState<'edit' | 'import' | 'download' | 'pdf' | null>(null);
+  const topActionsRef = useRef<HTMLDivElement>(null);
+  const lastPointerTypeRef = useRef<string>('mouse');
+
+  useEffect(() => {
+    if (!expandedTopAction) return;
+    const handleOutside = (e: PointerEvent) => {
+      if (topActionsRef.current && !topActionsRef.current.contains(e.target as Node)) {
+        setExpandedTopAction(null);
+      }
+    };
+    document.addEventListener('pointerdown', handleOutside);
+    return () => document.removeEventListener('pointerdown', handleOutside);
+  }, [expandedTopAction]);
 
   const expenseItems = useMemo(() => {
     if (!currentTrip) return [];
@@ -113,7 +127,25 @@ export const CalendarView: React.FC = () => {
 
   const handleExportPDF = () => {
     exportTripPDF(currentTrip, currency, use12h, packingCategories, calendarCategories);
-    showToast('Exported itinerary & packing checklist as PDF');
+    showToast('Exported itinerary, packing checklist & budget as PDF');
+  };
+
+  const handleTopActionClick = (
+    actionId: 'edit' | 'import' | 'download' | 'pdf',
+    execute: () => void
+  ) => {
+    const isMobileOrTouch =
+      lastPointerTypeRef.current === 'touch' ||
+      (typeof window !== 'undefined' &&
+        (window.innerWidth < 768 || !window.matchMedia('(hover: hover) and (pointer: fine)').matches));
+
+    if (isMobileOrTouch && expandedTopAction !== actionId) {
+      setExpandedTopAction(actionId);
+      return;
+    }
+
+    setExpandedTopAction(null);
+    execute();
   };
 
   const handleStartBatchGCal = () => {
@@ -176,18 +208,34 @@ export const CalendarView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div ref={topActionsRef} className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setScreen('planner')}
+                onPointerDown={(e) => {
+                  lastPointerTypeRef.current = e.pointerType || 'mouse';
+                }}
+                onClick={() => handleTopActionClick('edit', () => setScreen('planner'))}
                 title="Back to Calendar & Edit"
                 aria-label="Edit"
+                aria-expanded={expandedTopAction === 'edit'}
                 className="group inline-flex items-center h-9 px-2.5 rounded-xl border border-amber-200/90 dark:border-amber-400/25 bg-amber-50/80 dark:bg-amber-500/10 hover:bg-amber-100/90 dark:hover:bg-amber-500/20 hover:border-amber-400/60 text-amber-700 dark:text-amber-300 text-xs font-medium shadow-2xs transition-colors duration-200 cursor-pointer"
               >
                 <Pencil className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                <span className="inline-grid grid-cols-[0fr] group-hover:grid-cols-[1fr] transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
+                <span
+                  className={`inline-grid transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    expandedTopAction === 'edit'
+                      ? 'grid-cols-[1fr]'
+                      : 'grid-cols-[0fr] [@media(hover:hover)]:group-hover:grid-cols-[1fr]'
+                  }`}
+                >
                   <span className="min-w-0 overflow-hidden whitespace-nowrap">
-                    <span className="inline-block pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out">
+                    <span
+                      className={`inline-block pl-2 transition-opacity duration-300 ease-out ${
+                        expandedTopAction === 'edit'
+                          ? 'opacity-100'
+                          : 'opacity-0 [@media(hover:hover)]:group-hover:opacity-100'
+                      }`}
+                    >
                       Edit
                     </span>
                   </span>
@@ -196,15 +244,31 @@ export const CalendarView: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => setIsGCalBatchModalOpen(true)}
+                onPointerDown={(e) => {
+                  lastPointerTypeRef.current = e.pointerType || 'mouse';
+                }}
+                onClick={() => handleTopActionClick('import', () => setIsGCalBatchModalOpen(true))}
                 title="Import"
                 aria-label="Import"
+                aria-expanded={expandedTopAction === 'import'}
                 className="group inline-flex items-center h-9 px-2.5 rounded-xl border border-blue-200/90 dark:border-blue-400/25 bg-blue-50/80 dark:bg-blue-500/10 hover:bg-blue-100/90 dark:hover:bg-blue-500/20 hover:border-blue-400/60 text-blue-700 dark:text-blue-300 text-xs font-medium shadow-2xs transition-colors duration-200 cursor-pointer"
               >
                 <CalendarPlus className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                <span className="inline-grid grid-cols-[0fr] group-hover:grid-cols-[1fr] transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
+                <span
+                  className={`inline-grid transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    expandedTopAction === 'import'
+                      ? 'grid-cols-[1fr]'
+                      : 'grid-cols-[0fr] [@media(hover:hover)]:group-hover:grid-cols-[1fr]'
+                  }`}
+                >
                   <span className="min-w-0 overflow-hidden whitespace-nowrap">
-                    <span className="inline-block pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out">
+                    <span
+                      className={`inline-block pl-2 transition-opacity duration-300 ease-out ${
+                        expandedTopAction === 'import'
+                          ? 'opacity-100'
+                          : 'opacity-0 [@media(hover:hover)]:group-hover:opacity-100'
+                      }`}
+                    >
                       Import
                     </span>
                   </span>
@@ -213,15 +277,31 @@ export const CalendarView: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => setIsDownloadModalOpen(true)}
+                onPointerDown={(e) => {
+                  lastPointerTypeRef.current = e.pointerType || 'mouse';
+                }}
+                onClick={() => handleTopActionClick('download', () => setIsDownloadModalOpen(true))}
                 title="Download (.ics, .json, .zip)"
                 aria-label="Download"
+                aria-expanded={expandedTopAction === 'download'}
                 className="group inline-flex items-center h-9 px-2.5 rounded-xl border border-emerald-200/90 dark:border-emerald-400/25 bg-emerald-50/80 dark:bg-emerald-500/10 hover:bg-emerald-100/90 dark:hover:bg-emerald-500/20 hover:border-emerald-400/60 text-emerald-700 dark:text-emerald-300 text-xs font-medium shadow-2xs transition-colors duration-200 cursor-pointer"
               >
                 <Download className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                <span className="inline-grid grid-cols-[0fr] group-hover:grid-cols-[1fr] transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
+                <span
+                  className={`inline-grid transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    expandedTopAction === 'download'
+                      ? 'grid-cols-[1fr]'
+                      : 'grid-cols-[0fr] [@media(hover:hover)]:group-hover:grid-cols-[1fr]'
+                  }`}
+                >
                   <span className="min-w-0 overflow-hidden whitespace-nowrap">
-                    <span className="inline-block pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out">
+                    <span
+                      className={`inline-block pl-2 transition-opacity duration-300 ease-out ${
+                        expandedTopAction === 'download'
+                          ? 'opacity-100'
+                          : 'opacity-0 [@media(hover:hover)]:group-hover:opacity-100'
+                      }`}
+                    >
                       Download
                     </span>
                   </span>
@@ -230,15 +310,31 @@ export const CalendarView: React.FC = () => {
 
               <button
                 type="button"
-                onClick={handleExportPDF}
-                title="Export Daily Flow & Packing Checklist as PDF"
+                onPointerDown={(e) => {
+                  lastPointerTypeRef.current = e.pointerType || 'mouse';
+                }}
+                onClick={() => handleTopActionClick('pdf', handleExportPDF)}
+                title="Export Daily Flow, Packing Checklist & Budget as PDF"
                 aria-label="Export as PDF"
+                aria-expanded={expandedTopAction === 'pdf'}
                 className="group inline-flex items-center h-9 px-2.5 rounded-xl border border-rose-200/90 dark:border-rose-400/25 bg-rose-50/80 dark:bg-rose-500/10 hover:bg-rose-100/90 dark:hover:bg-rose-500/20 hover:border-rose-400/60 text-rose-700 dark:text-rose-300 text-xs font-medium shadow-2xs transition-colors duration-200 cursor-pointer"
               >
                 <FileDown className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
-                <span className="inline-grid grid-cols-[0fr] group-hover:grid-cols-[1fr] transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
+                <span
+                  className={`inline-grid transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    expandedTopAction === 'pdf'
+                      ? 'grid-cols-[1fr]'
+                      : 'grid-cols-[0fr] [@media(hover:hover)]:group-hover:grid-cols-[1fr]'
+                  }`}
+                >
                   <span className="min-w-0 overflow-hidden whitespace-nowrap">
-                    <span className="inline-block pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out">
+                    <span
+                      className={`inline-block pl-2 transition-opacity duration-300 ease-out ${
+                        expandedTopAction === 'pdf'
+                          ? 'opacity-100'
+                          : 'opacity-0 [@media(hover:hover)]:group-hover:opacity-100'
+                      }`}
+                    >
                       Export as PDF
                     </span>
                   </span>
@@ -353,11 +449,11 @@ export const CalendarView: React.FC = () => {
                   return (
                     <section 
                       key={d}
-                      className="rounded-3xl bg-white dark:bg-[#171a21]/90 border border-black/5 dark:border-white/10 shadow-[0_10px_30px_-4px_rgba(0,0,0,0.04),0_2px_6px_-1px_rgba(0,0,0,0.02)] dark:shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)] overflow-clip"
+                      className="rounded-3xl bg-white dark:bg-[#171a21]/90 border border-black/5 dark:border-white/10 shadow-[0_10px_30px_-4px_rgba(0,0,0,0.04),0_2px_6px_-1px_rgba(0,0,0,0.02)] dark:shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)]"
                     >
                       <div
                         style={{ top: 'var(--navbar-height, 56px)' }}
-                        className="sticky z-20 flex items-center justify-between px-5 py-3.5 rounded-t-3xl glass-sticky border-b border-black/5 dark:border-white/10 transition-colors"
+                        className="sticky z-20 flex items-center justify-between px-5 py-3.5 rounded-t-3xl glass-sticky border-b border-black/5 dark:border-white/10"
                       >
                         <div className="flex items-center gap-3">
                           <span className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold font-mono text-xs flex items-center justify-center">
@@ -441,11 +537,11 @@ export const CalendarView: React.FC = () => {
                   return (
                     <section 
                       key={d}
-                      className="rounded-3xl bg-white dark:bg-[#171a21]/90 border border-black/5 dark:border-white/10 shadow-[0_10px_30px_-4px_rgba(0,0,0,0.04),0_2px_6px_-1px_rgba(0,0,0,0.02)] dark:shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)] flex flex-col overflow-clip"
+                      className="rounded-3xl bg-white dark:bg-[#171a21]/90 border border-black/5 dark:border-white/10 shadow-[0_10px_30px_-4px_rgba(0,0,0,0.04),0_2px_6px_-1px_rgba(0,0,0,0.02)] dark:shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)] flex flex-col"
                     >
                       <div
                         style={{ top: 'var(--navbar-height, 56px)' }}
-                        className="sticky z-20 flex items-center justify-between px-4 py-3 rounded-t-3xl glass-sticky border-b border-black/5 dark:border-white/10 transition-colors"
+                        className="sticky z-20 flex items-center justify-between px-4 py-3 rounded-t-3xl glass-sticky border-b border-black/5 dark:border-white/10"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold font-mono text-[11px] flex items-center justify-center shrink-0">
@@ -516,10 +612,10 @@ export const CalendarView: React.FC = () => {
               </div>
             </div>
 
-            <section className="rounded-3xl bg-white dark:bg-[#171a21]/90 border border-black/5 dark:border-white/10 shadow-[0_10px_30px_-4px_rgba(0,0,0,0.04),0_2px_6px_-1px_rgba(0,0,0,0.02)] dark:shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)] overflow-clip">
+            <section className="rounded-3xl bg-white dark:bg-[#171a21]/90 border border-black/5 dark:border-white/10 shadow-[0_10px_30px_-4px_rgba(0,0,0,0.04),0_2px_6px_-1px_rgba(0,0,0,0.02)] dark:shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)]">
               <div
                 style={{ top: 'var(--navbar-height, 56px)' }}
-                className="sticky z-20 flex items-center justify-between px-5 py-3.5 rounded-t-3xl glass-sticky border-b border-black/5 dark:border-white/10 transition-colors"
+                className="sticky z-20 flex items-center justify-between px-5 py-3.5 rounded-t-3xl glass-sticky border-b border-black/5 dark:border-white/10"
               >
                 <div className="flex items-center gap-3">
                   <span className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
@@ -665,10 +761,10 @@ export const CalendarView: React.FC = () => {
               </div>
             </div>
 
-            <section className="rounded-3xl bg-white dark:bg-[#171a21]/90 border border-black/5 dark:border-white/10 shadow-[0_10px_30px_-4px_rgba(0,0,0,0.04),0_2px_6px_-1px_rgba(0,0,0,0.02)] dark:shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)] overflow-clip">
+            <section className="rounded-3xl bg-white dark:bg-[#171a21]/90 border border-black/5 dark:border-white/10 shadow-[0_10px_30px_-4px_rgba(0,0,0,0.04),0_2px_6px_-1px_rgba(0,0,0,0.02)] dark:shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)]">
               <div
                 style={{ top: 'var(--navbar-height, 56px)' }}
-                className="sticky z-20 flex items-center justify-between px-5 py-3.5 rounded-t-3xl glass-sticky border-b border-black/5 dark:border-white/10 transition-colors"
+                className="sticky z-20 flex items-center justify-between px-5 py-3.5 rounded-t-3xl glass-sticky border-b border-black/5 dark:border-white/10"
               >
                 <div className="flex items-center gap-3">
                   <span className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">

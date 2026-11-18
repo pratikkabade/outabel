@@ -38,6 +38,7 @@ type ViewMode = 'multi-day' | 'day' | 'agenda';
 interface GoogleCalendarTimelineProps {
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
+  categoryFilter: ItemType | 'all';
 }
 
 const DENSITY_HEIGHTS: Record<CalendarDensity, number> = {
@@ -46,7 +47,9 @@ const DENSITY_HEIGHTS: Record<CalendarDensity, number> = {
   spacious: 88,
 };
 
-export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = () => {
+export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
+  categoryFilter,
+}) => {
   const { 
     currentTrip, 
     activeDay, 
@@ -65,7 +68,6 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = () 
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'agenda' : 'multi-day'
   );
-  const [categoryFilter, setCategoryFilter] = useState<ItemType | 'all'>('all');
   const [dragHoverTarget, setDragHoverTarget] = useState<{ day: number; hour: number; half: boolean } | null>(null);
   const [resizeState, setResizeState] = useState<{
     itemId: string;
@@ -289,86 +291,52 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = () 
   const activeDaySuggestions = generateSuggestionsForDay(safeActiveDay, currentTrip);
 
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0 bg-white dark:bg-[#12151c] rounded-2xl border border-black/10 dark:border-white/10 shadow-sm overflow-hidden select-none">
-      {/* Google Calendar Toolbar */}
-      <div className="px-2.5 sm:px-3.5 py-2 border-b border-black/10 dark:border-white/10 glass-sticky flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 shrink-0">
-        {/* Left: Category Filter Pills */}
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mobile-no-scrollbar py-0.5 max-w-full">
-          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-neutral-200/60 dark:bg-neutral-800/80 text-[11px]">
-            <button
-              type="button"
-              onClick={() => setCategoryFilter('all')}
-              className={`px-2.5 py-1 rounded-md font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                categoryFilter === 'all'
-                  ? 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white shadow-2xs font-semibold'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
-              }`}
-            >
-              All
-            </button>
-            {calendarCategories.map((cat) => (
+    <div className="flex-1 flex flex-col h-full min-w-0 bg-white dark:bg-[#12151c] rounded-2xl border border-black/10 dark:border-white/10 shadow-sm select-none">
+      {/* Google Calendar Toolbar: Week Grid, Day, Agenda */}
+      <div className="px-2.5 sm:px-3.5 py-2 border-b border-black/10 dark:border-white/10 glass-sticky rounded-t-2xl flex items-center justify-end gap-2 shrink-0">
+        {/* View Mode Switcher: icon-only by default; reveals text smoothly on hover and when active */}
+        <div className="flex items-center p-0.5 rounded-lg bg-neutral-200/60 dark:bg-neutral-800/80 text-[11px]">
+          {[
+            { id: 'multi-day' as const, label: 'Week Grid', icon: Columns },
+            { id: 'day' as const, label: 'Day', icon: Grid },
+            { id: 'agenda' as const, label: 'Agenda', icon: List },
+          ].map(({ id, label, icon: Icon }) => {
+            const isActive = viewMode === id;
+            return (
               <button
-                key={cat.id}
+                key={id}
                 type="button"
-                onClick={() => setCategoryFilter(cat.id)}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                  categoryFilter === cat.id
-                    ? 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white shadow-2xs font-semibold'
+                onClick={() => setViewMode(id)}
+                title={label}
+                className={`group relative flex items-center h-7 px-2 rounded-md font-medium transition-colors duration-200 cursor-pointer ${
+                  isActive
+                    ? 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white shadow-2xs'
                     : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
                 }`}
               >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Right: View Switcher */}
-        <div className="flex items-center gap-2 shrink-0 ml-auto">
-          {/* View Mode Switcher: icon-only by default; reveals text smoothly on hover and when active */}
-          <div className="flex items-center p-0.5 rounded-lg bg-neutral-200/60 dark:bg-neutral-800/80 text-[11px]">
-            {[
-              { id: 'multi-day' as const, label: 'Week Grid', icon: Columns },
-              { id: 'day' as const, label: 'Day', icon: Grid },
-              { id: 'agenda' as const, label: 'Agenda', icon: List },
-            ].map(({ id, label, icon: Icon }) => {
-              const isActive = viewMode === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setViewMode(id)}
-                  title={label}
-                  className={`group relative flex items-center h-7 px-2 rounded-md font-medium transition-colors duration-200 cursor-pointer ${
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span
+                  className={`inline-grid transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                     isActive
-                      ? 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white shadow-2xs'
-                      : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+                      ? 'grid-cols-[1fr]'
+                      : 'grid-cols-[0fr] group-hover:grid-cols-[1fr]'
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span
-                    className={`inline-grid transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                      isActive
-                        ? 'grid-cols-[1fr]'
-                        : 'grid-cols-[0fr] group-hover:grid-cols-[1fr]'
-                    }`}
-                  >
-                    <span className="min-w-0 overflow-hidden whitespace-nowrap">
-                      <span
-                        className={`inline-block pl-1.5 text-xs transition-opacity duration-300 ease-out ${
-                          isActive
-                            ? 'opacity-100'
-                            : 'opacity-0 group-hover:opacity-100'
-                        }`}
-                      >
-                        {label}
-                      </span>
+                  <span className="min-w-0 overflow-hidden whitespace-nowrap">
+                    <span
+                      className={`inline-block pl-1.5 text-xs transition-opacity duration-300 ease-out ${
+                        isActive
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100'
+                      }`}
+                    >
+                      {label}
                     </span>
                   </span>
-                </button>
-              );
-            })}
-          </div>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -377,7 +345,9 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = () 
         /* Agenda View with flush-top pinned sticky date headers & Glass OS blur */
         <div
           ref={agendaScrollRef}
-          className="relative flex-1 overflow-y-auto px-2.5 sm:px-6 pb-6 pt-0 space-y-4 mobile-no-scrollbar"
+          className={`relative flex-1 overflow-y-auto px-2.5 sm:px-6 pb-6 pt-0 space-y-4 mobile-no-scrollbar ${
+            activeDaySuggestions.length === 0 ? 'rounded-b-2xl' : ''
+          }`}
         >
           {Array.from({ length: currentTrip.numDays }, (_, i) => i + 1).map((day) => {
             const dayItems = filteredItems
@@ -393,11 +363,11 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = () 
               <section
                 key={day}
                 id={`agenda-day-${day}`}
-                className="rounded-2xl bg-white dark:bg-[#171a21]/90 border border-neutral-200 dark:border-neutral-800 shadow-xs overflow-clip"
+                className="rounded-2xl bg-white dark:bg-[#171a21]/90 border border-neutral-200 dark:border-neutral-800 shadow-xs"
               >
                 <div
                   onClick={() => setActiveDay(day)}
-                  className="sticky top-0 z-20 flex items-center justify-between gap-2 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-t-2xl glass-sticky border-b border-neutral-200/80 dark:border-neutral-800/80 transition-colors cursor-pointer"
+                  className="sticky top-0 z-20 flex items-center justify-between gap-2 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-t-2xl glass-sticky border-b border-neutral-200/80 dark:border-neutral-800/80 cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span
@@ -536,7 +506,9 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = () 
         /* True Google Calendar Multi-Day / Week / Day Grid View */
         <div 
           ref={scrollContainerRef}
-          className="flex-1 overflow-auto relative timeline-scroll-container mobile-no-scrollbar"
+          className={`flex-1 overflow-auto relative timeline-scroll-container mobile-no-scrollbar ${
+            activeDaySuggestions.length === 0 ? 'rounded-b-2xl' : ''
+          }`}
         >
           <div 
             className="min-w-full"
@@ -941,7 +913,7 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = () 
 
       {/* Quick Suggestions Strip at bottom */}
       {activeDaySuggestions.length > 0 && (
-        <div className="px-3 sm:px-4 py-2 border-t border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-[#171b24] flex items-center justify-between gap-3 text-xs shrink-0">
+        <div className="px-3 sm:px-4 py-2 border-t border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-[#171b24] rounded-b-2xl flex items-center justify-between gap-3 text-xs shrink-0">
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mobile-no-scrollbar">
             <span className="font-semibold text-neutral-600 dark:text-neutral-400 flex items-center gap-1 shrink-0 text-[11px]">
               <Sparkles className="w-3.5 h-3.5 text-blue-500" />

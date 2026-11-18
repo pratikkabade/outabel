@@ -11,6 +11,7 @@ import { RotateCcw } from 'lucide-react';
 import { useTrip } from '../context/TripContext';
 import { downloadICS } from '../utils/ics';
 import { formatCurrency } from '../utils/currency';
+import { OutabelLogo } from './OutabelLogo';
 
 export const TripsList: React.FC = () => {
   const { trips, currentTrip, setCurrentTrip, deleteTrip, setScreen, showToast, saveTrip, currency, loadSampleTrip } = useTrip();
@@ -31,13 +32,16 @@ export const TripsList: React.FC = () => {
     <div className="relative z-10 w-full min-h-[calc(100vh-65px)] pb-24">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
-              My Saved Trips
-            </h1>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              All your itineraries safely stored in browser localStorage.
-            </p>
+          <div className="flex items-center gap-3">
+            <OutabelLogo className="w-10 h-10 drop-shadow-sm" />
+            <div>
+              <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+                My Saved Trips
+              </h1>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                All your itineraries safely stored in browser localStorage.
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

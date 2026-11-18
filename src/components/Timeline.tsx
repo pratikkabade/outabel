@@ -8,6 +8,7 @@ import {
   X
 } from 'lucide-react';
 import { useTrip } from '../context/TripContext';
+import { ItemType } from '../types/trip';
 import { GoogleCalendarTimeline } from './GoogleCalendarTimeline';
 import { checkDayConflicts, formatDayDate } from '../utils/time';
 import { formatCurrency } from '../utils/currency';
@@ -17,6 +18,7 @@ export const Timeline: React.FC = () => {
   const { currentTrip, activeDay, setActiveDay, openAddModal, currency, setScreen, calendarCategories } = useTrip();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeBreakdown, setActiveBreakdown] = useState<'events' | 'budget' | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<ItemType | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedDays, setCollapsedDays] = useState<Record<number, boolean>>({});
 
@@ -220,6 +222,18 @@ export const Timeline: React.FC = () => {
                 </button>
               </div>
 
+              {categoryFilter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter('all')}
+                  title="Clear category filter"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold bg-blue-500/12 text-blue-700 dark:text-blue-300 border border-blue-500/25 hover:bg-blue-500/20 transition-colors cursor-pointer"
+                >
+                  <span>Filtered: {resolveCalendarCategory(categoryFilter, calendarCategories).label}</span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+
               {totalConflicts > 0 && (
                 <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                   <AlertTriangle className="w-3.5 h-3.5" />
@@ -240,43 +254,93 @@ export const Timeline: React.FC = () => {
             </div>
           </div>
 
-          {/* Expanded Category Breakdown (specific to Events or Est. Budget; hides 0 count / ₹0 items) */}
+          {/* Expanded Category Breakdown (interactive filter buttons for Events or Est. Budget) */}
           {activeBreakdown === 'events' && (
-            <div className="mt-2.5 pt-2.5 pb-1 border-t border-black/5 dark:border-white/10 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-neutral-500 dark:text-neutral-400 animate-in fade-in slide-in-from-top-1 duration-200">
-              <span className="font-semibold text-neutral-700 dark:text-neutral-300 shrink-0">
-                Events breakdown:
+            <div className="mt-2.5 pt-2.5 pb-1 border-t border-black/5 dark:border-white/10 flex flex-wrap items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400 animate-in fade-in slide-in-from-top-1 duration-200">
+              <span className="font-semibold text-neutral-700 dark:text-neutral-300 shrink-0 mr-1">
+                Events filter:
               </span>
               {eventsBreakdownCategories.length === 0 ? (
                 <span>No events scheduled yet.</span>
               ) : (
-                eventsBreakdownCategories.map((cat, idx) => (
-                  <React.Fragment key={cat.id}>
-                    {idx > 0 && <span className="text-neutral-300 dark:text-neutral-600">·</span>}
-                    <span className={`font-mono tabular-nums font-medium whitespace-nowrap ${cat.textClass}`}>
-                      {cat.label}: {cat.count}
-                    </span>
-                  </React.Fragment>
-                ))
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('all')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono tabular-nums font-semibold transition-all cursor-pointer ${
+                      categoryFilter === 'all'
+                        ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-transparent shadow-2xs'
+                        : 'bg-white/80 dark:bg-white/5 border-black/10 dark:border-white/10 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    <span>All: {currentTrip.items.length}</span>
+                  </button>
+                  {eventsBreakdownCategories.map((cat) => {
+                    const resolved = resolveCalendarCategory(cat.id, calendarCategories);
+                    const isSelected = categoryFilter === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setCategoryFilter((prev) => (prev === cat.id ? 'all' : cat.id))}
+                        aria-pressed={isSelected}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono tabular-nums font-medium transition-all cursor-pointer ${
+                          isSelected
+                            ? resolved.style.selectedModal
+                            : `bg-white/80 dark:bg-white/5 border-black/10 dark:border-white/10 hover:bg-neutral-100 dark:hover:bg-white/10 ${cat.textClass}`
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${resolved.style.swatch}`} />
+                        <span>{cat.label}: {cat.count}</span>
+                      </button>
+                    );
+                  })}
+                </>
               )}
             </div>
           )}
 
           {activeBreakdown === 'budget' && (
-            <div className="mt-2.5 pt-2.5 pb-1 border-t border-black/5 dark:border-white/10 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-neutral-500 dark:text-neutral-400 animate-in fade-in slide-in-from-top-1 duration-200">
-              <span className="font-semibold text-neutral-700 dark:text-neutral-300 shrink-0">
-                Budget breakdown:
+            <div className="mt-2.5 pt-2.5 pb-1 border-t border-black/5 dark:border-white/10 flex flex-wrap items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400 animate-in fade-in slide-in-from-top-1 duration-200">
+              <span className="font-semibold text-neutral-700 dark:text-neutral-300 shrink-0 mr-1">
+                Budget filter:
               </span>
               {budgetBreakdownCategories.length === 0 ? (
                 <span>No expenses recorded yet.</span>
               ) : (
-                budgetBreakdownCategories.map((cat, idx) => (
-                  <React.Fragment key={cat.id}>
-                    {idx > 0 && <span className="text-neutral-300 dark:text-neutral-600">·</span>}
-                    <span className={`font-mono tabular-nums font-medium whitespace-nowrap ${cat.textClass}`}>
-                      {cat.label}: {formatCurrency(cat.amount, currency)}
-                    </span>
-                  </React.Fragment>
-                ))
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('all')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono tabular-nums font-semibold transition-all cursor-pointer ${
+                      categoryFilter === 'all'
+                        ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-transparent shadow-2xs'
+                        : 'bg-white/80 dark:bg-white/5 border-black/10 dark:border-white/10 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    <span>All: {formatCurrency(tripSummary.totalCost, currency)}</span>
+                  </button>
+                  {budgetBreakdownCategories.map((cat) => {
+                    const resolved = resolveCalendarCategory(cat.id, calendarCategories);
+                    const isSelected = categoryFilter === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setCategoryFilter((prev) => (prev === cat.id ? 'all' : cat.id))}
+                        aria-pressed={isSelected}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono tabular-nums font-medium transition-all cursor-pointer ${
+                          isSelected
+                            ? resolved.style.selectedModal
+                            : `bg-white/80 dark:bg-white/5 border-black/10 dark:border-white/10 hover:bg-neutral-100 dark:hover:bg-white/10 ${cat.textClass}`
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${resolved.style.swatch}`} />
+                        <span>{cat.label}: {formatCurrency(cat.amount, currency)}</span>
+                      </button>
+                    );
+                  })}
+                </>
               )}
             </div>
           )}
@@ -288,7 +352,7 @@ export const Timeline: React.FC = () => {
         {sidebarOpen ? (
           <div
             onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 z-40 p-3 pt-16 bg-slate-950/50 flex items-center justify-center md:static md:inset-auto md:z-auto md:p-0 md:bg-transparent md:block md:h-full"
+            className="fixed inset-0 z-40 p-3 pt-16 bg-slate-950/50 backdrop-blur-md flex items-center justify-center md:static md:inset-auto md:z-auto md:p-0 md:bg-transparent md:backdrop-blur-none md:block md:h-full"
           >
             <aside
               onClick={(e) => e.stopPropagation()}
@@ -429,6 +493,7 @@ export const Timeline: React.FC = () => {
           <GoogleCalendarTimeline
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+            categoryFilter={categoryFilter}
           />
         </div>
       </div>

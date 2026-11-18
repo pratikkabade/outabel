@@ -277,6 +277,243 @@ export const exportTripPDF = (
     }
   }
 
+  // --- Section 3: Expenses & Budget (always starts on a new page) ---
+  doc.addPage();
+  y = 44;
+
+  const expenseItems = trip.items
+    .filter((item) => typeof item.cost === 'number' && item.cost > 0)
+    .sort((a, b) => {
+      if (a.day !== b.day) return a.day - b.day;
+      return a.start.localeCompare(b.start);
+    });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Expenses & Budget', margin, y);
+
+  doc.setFontSize(11);
+  doc.setTextColor(5, 150, 105);
+  doc.text(
+    `Total: ${formatCurrencySafe(totalCost, currency)}`,
+    margin + contentWidth,
+    y,
+    { align: 'right' }
+  );
+
+  y += 8;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(1);
+  doc.line(margin, y, margin + contentWidth, y);
+  y += 16;
+
+  if (expenseItems.length === 0) {
+    ensureSpace(24);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text('No expenses recorded yet.', margin + 4, y + 10);
+  } else {
+    // Summary Banner
+    ensureSpace(64);
+    doc.setFillColor(236, 253, 245);
+    doc.setDrawColor(167, 243, 208);
+    doc.roundedRect(margin, y, contentWidth, 52, 6, 6, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(4, 120, 87);
+    doc.text('TOTAL ESTIMATED BUDGET', margin + 14, y + 17);
+
+    doc.setFontSize(15);
+    doc.setTextColor(6, 78, 59);
+    doc.text(formatCurrencySafe(totalCost, currency), margin + 14, y + 37);
+
+    const avgPerDay = totalCost / Math.max(1, trip.numDays);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(4, 120, 87);
+    doc.text(
+      `${expenseItems.length} Expense Item${expenseItems.length === 1 ? '' : 's'}   |   Avg / Day: ${formatCurrencySafe(
+        avgPerDay,
+        currency
+      )}`,
+      margin + contentWidth - 14,
+      y + 30,
+      { align: 'right' }
+    );
+
+    y += 68;
+
+    // Category Breakdown
+    const totalsByType = new Map<string, { amount: number; count: number }>();
+    for (const item of expenseItems) {
+      const key = (item.type || 'activity').toLowerCase();
+      const prev = totalsByType.get(key) || { amount: 0, count: 0 };
+      totalsByType.set(key, {
+        amount: prev.amount + (item.cost || 0),
+        count: prev.count + 1,
+      });
+    }
+
+    const categoryBreakdown: Array<{
+      id: string;
+      label: string;
+      amount: number;
+      count: number;
+      rgbAccent: [number, number, number];
+      rgbFill: [number, number, number];
+    }> = [];
+    const seenTypes = new Set<string>();
+
+    for (const cat of calendarCategories) {
+      const key = cat.id.toLowerCase();
+      seenTypes.add(key);
+      const entry = totalsByType.get(key);
+      if (entry && entry.amount > 0) {
+        const resolved = resolveCalendarCategory(cat.id, calendarCategories);
+        categoryBreakdown.push({
+          id: cat.id,
+          label: cat.label,
+          amount: entry.amount,
+          count: entry.count,
+          rgbAccent: resolved.style.rgbAccent,
+          rgbFill: resolved.style.rgbFill,
+        });
+      }
+    }
+
+    for (const [key, entry] of totalsByType.entries()) {
+      if (!seenTypes.has(key) && entry.amount > 0) {
+        const resolved = resolveCalendarCategory(key, calendarCategories);
+        categoryBreakdown.push({
+          id: key,
+          label: resolved.label,
+          amount: entry.amount,
+          count: entry.count,
+          rgbAccent: resolved.style.rgbAccent,
+          rgbFill: resolved.style.rgbFill,
+        });
+      }
+    }
+
+    if (categoryBreakdown.length > 0) {
+      ensureSpace(32);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text('Category Breakdown', margin, y);
+      y += 12;
+
+      for (const cat of categoryBreakdown) {
+        ensureSpace(28);
+        const pct = totalCost > 0 ? Math.round((cat.amount / totalCost) * 100) : 0;
+
+        doc.setFillColor(...cat.rgbFill);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(margin, y, contentWidth, 23, 4, 4, 'FD');
+        doc.setFillColor(...cat.rgbAccent);
+        doc.rect(margin, y, 3.5, 23, 'F');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(15, 23, 42);
+        doc.text(cat.label, margin + 12, y + 14.5);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(
+          `${cat.count} item${cat.count === 1 ? '' : 's'}  ·  ${pct}%`,
+          margin + 120,
+          y + 14.5
+        );
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(15, 23, 42);
+        doc.text(formatCurrencySafe(cat.amount, currency), margin + contentWidth - 10, y + 14.5, {
+          align: 'right',
+        });
+
+        y += 27;
+      }
+
+      y += 10;
+    }
+
+    // Itemized Expenses List
+    ensureSpace(30);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`Itemized Expenses (${expenseItems.length})`, margin, y);
+    y += 12;
+
+    for (const item of expenseItems) {
+      const resolved = resolveCalendarCategory(item.type, calendarCategories);
+      const titleLines: string[] = doc.splitTextToSize(item.title, contentWidth - 115);
+      const locationLines: string[] = item.location
+        ? doc.splitTextToSize(`Location: ${item.location}`, contentWidth - 115)
+        : [];
+
+      const rowHeight =
+        22 +
+        titleLines.length * 12 +
+        (locationLines.length > 0 ? locationLines.length * 10 + 2 : 0) +
+        6;
+
+      ensureSpace(rowHeight + 5);
+
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(margin, y, contentWidth, rowHeight, 4, 4, 'FD');
+
+      doc.setFillColor(...resolved.style.rgbAccent);
+      doc.rect(margin, y, 3.5, rowHeight, 'F');
+
+      // Row 1: Day + Time + Category
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...resolved.style.rgbAccent);
+      doc.text(
+        `DAY ${item.day}  ·  ${formatTimeDisplay(item.start, use12h)}  |  ${resolved.label.toUpperCase()}`,
+        margin + 12,
+        y + 13
+      );
+
+      // Amount right-aligned
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(
+        formatCurrencySafe(item.cost || 0, currency),
+        margin + contentWidth - 10,
+        y + 14,
+        { align: 'right' }
+      );
+
+      // Row 2: Title
+      let textY = y + 27;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(titleLines, margin + 12, textY);
+      textY += titleLines.length * 12;
+
+      // Row 3: Location
+      if (locationLines.length > 0) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(locationLines, margin + 12, textY);
+      }
+
+      y += rowHeight + 5;
+    }
+  }
+
   // --- Footer Page Numbers ---
   const totalPages = doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {

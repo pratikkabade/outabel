@@ -45,7 +45,7 @@ export const AnimatedModal: React.FC<AnimatedModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/55 ${backdropClassName}`}
+          className={`modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/50 ${backdropClassName}`}
           onClick={() => onCloseRef.current()}
         >
           <motion.div
