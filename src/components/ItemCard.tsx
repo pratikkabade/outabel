@@ -6,7 +6,9 @@ import {
   Edit3, 
   Calendar,
   AlertTriangle,
-  GripVertical
+  GripVertical,
+  Ticket,
+  Paperclip
 } from 'lucide-react';
 import { ItineraryItem } from '../types/trip';
 import { useTrip } from '../context/TripContext';
@@ -130,6 +132,31 @@ export const ItemCard: React.FC<ItemCardProps> = ({
               <MapPin className="w-3.5 h-3.5 shrink-0 text-blue-500" />
               <span className="truncate">{item.location}</span>
             </a>
+          </div>
+        )}
+
+        {(item.providerName || item.terminalOrPlatform || item.confirmationNumber || (item.attachments && item.attachments.length > 0)) && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-700 dark:text-neutral-300">
+            {item.providerName && (
+              <span className="font-medium truncate">{item.providerName}</span>
+            )}
+            {item.terminalOrPlatform && (
+              <span className="text-neutral-500 dark:text-neutral-400 truncate">
+                {item.terminalOrPlatform}
+              </span>
+            )}
+            {item.confirmationNumber && (
+              <span className="inline-flex items-center gap-1 font-mono font-semibold text-blue-600 dark:text-blue-400">
+                <Ticket className="w-3 h-3 shrink-0" />
+                <span>{item.confirmationNumber}</span>
+              </span>
+            )}
+            {item.attachments && item.attachments.length > 0 && (
+              <span className="inline-flex items-center gap-1 text-neutral-600 dark:text-neutral-300 font-medium">
+                <Paperclip className="w-3 h-3 shrink-0" />
+                <span>{item.attachments.length} file{item.attachments.length > 1 ? 's' : ''}</span>
+              </span>
+            )}
           </div>
         )}
 

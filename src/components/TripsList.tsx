@@ -151,7 +151,7 @@ export const TripsList: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setCurrentTrip(trip);
-                      setScreen('planner');
+                      setScreen('planner', trip.id);
                     }}
                     className={`text-xs py-1.5 px-3.5 rounded-xl font-medium transition-all cursor-pointer ${
                       isCurrent

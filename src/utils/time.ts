@@ -117,13 +117,6 @@ export const checkDayConflicts = (
           type: 'overlap',
           message: `"${a.title}" overlaps with "${b.title}" (${a.end} vs ${b.start})`,
         });
-      } else if (bStart - aEnd < 15 && a.location && b.location && a.location !== b.location) {
-        warnings.push({
-          itemId1: a.id,
-          itemId2: b.id,
-          type: 'tight_gap',
-          message: `Only ${bStart - aEnd}m between "${a.location}" and "${b.location}"`,
-        });
       }
     }
   }

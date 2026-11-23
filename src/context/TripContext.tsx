@@ -1,5 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Trip, ItineraryItem, ViewScreen, PackingItem, PackingCategoryColor, PackingCategoryOption, CalendarCategoryOption, CategoryColor } from '../types/trip';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  Trip,
+  ItineraryItem,
+  ViewScreen,
+  PackingItem,
+  PackingCategoryColor,
+  PackingCategoryOption,
+  CalendarCategoryOption,
+  CategoryColor,
+  TripPace,
+} from '../types/trip';
 import { CurrencyCode } from '../utils/currency';
 import { SAMPLE_TRIP, SAMPLE_TRIPS } from '../utils/sampleData';
 import { decodeTripFromHash } from '../utils/share';
@@ -7,12 +18,38 @@ import { getDurationMinutes, addMinutesToTime } from '../utils/time';
 import { DEFAULT_PACKING_CATEGORIES } from '../utils/packingCategories';
 import { DEFAULT_CALENDAR_CATEGORIES } from '../utils/calendarCategories';
 import { ParsedTripImport } from '../utils/tripPackage';
+import { generateDefaultPackingList } from '../utils/defaultPackingLists';
 
 export type CalendarDensity = 'compact' | 'normal' | 'spacious';
 
+export interface ToastState {
+  id: number;
+  message: string;
+  undoable?: boolean;
+}
+
+export interface ShowToastOptions {
+  undoable?: boolean;
+  durationMs?: number;
+}
+
+export interface WizardDraft {
+  from: string;
+  to: string;
+  startDate: string;
+  numDays: number;
+  budget: number;
+  wakeTime: string;
+  dailyStartTime: string;
+  pace: TripPace;
+  copiedProvider: string | null;
+  importedItems: ItineraryItem[];
+  importedSourceName: string | null;
+}
+
 interface TripContextType {
   screen: ViewScreen;
-  setScreen: (screen: ViewScreen) => void;
+  setScreen: (screen: ViewScreen, tripId?: string) => void;
   trips: Trip[];
   currentTrip: Trip | null;
   setCurrentTrip: (trip: Trip | null) => void;
@@ -21,9 +58,11 @@ interface TripContextType {
     to: string;
     startDate: string;
     numDays: number;
+    budget?: number;
     preferredWakeTime: string;
     dailyStartTime: string;
-    pace: 'relaxed' | 'balanced' | 'packed';
+    pace: TripPace;
+    items?: ItineraryItem[];
   }) => Trip;
   saveTrip: (trip: Trip) => void;
   importTripPackage: (pkg: ParsedTripImport, options: { replaceCategories: boolean }) => Trip;
@@ -32,6 +71,7 @@ interface TripContextType {
   activeDay: number;
   setActiveDay: (day: number) => void;
   addItem: (item: Omit<ItineraryItem, 'id'>) => void;
+  addItemsBatch: (items: ItineraryItem[], nextNumDays?: number) => void;
   updateItem: (item: ItineraryItem) => void;
   deleteItem: (itemId: string) => void;
   duplicateItem: (itemId: string) => void;
@@ -50,8 +90,9 @@ interface TripContextType {
   theme: 'light' | 'dark' | 'system';
   setTheme: (t: 'light' | 'dark' | 'system') => void;
   toggleTheme: () => void;
-  toast: string | null;
-  showToast: (msg: string) => void;
+  toast: ToastState | null;
+  showToast: (msg: string, options?: ShowToastOptions) => void;
+  dismissToast: () => void;
   togglePackingItem: (itemId: string) => void;
   addPackingItem: (text: string, category: string) => void;
   deletePackingItem: (itemId: string) => void;
@@ -67,12 +108,17 @@ interface TripContextType {
   resetCalendarCategories: () => void;
   currency: CurrencyCode;
   setCurrency: (c: CurrencyCode) => void;
-  isProfileOpen: boolean;
-  setIsProfileOpen: (open: boolean) => void;
+  userName: string;
+  setUserName: (name: string) => void;
+  userEmail: string;
+  userInitials: string;
   use12h: boolean;
   setUse12h: (val: boolean) => void;
   calendarDensity: CalendarDensity;
   setCalendarDensity: (d: CalendarDensity) => void;
+  wizardDraft: WizardDraft;
+  updateWizardDraft: (updates: Partial<WizardDraft>) => void;
+  resetWizardDraft: () => void;
 }
 
 const STORAGE_KEY_TRIPS = 'wayfarer_saved_trips_v1';
@@ -81,9 +127,12 @@ const STORAGE_KEY_THEME = 'wayfarer_theme_preference_v1';
 const STORAGE_KEY_CURRENCY = 'wayfarer_currency_v1';
 const STORAGE_KEY_USE12H = 'wayfarer_use12h_v1';
 const STORAGE_KEY_DENSITY = 'wayfarer_calendar_density_v1';
+const STORAGE_KEY_USER_NAME = 'wayfarer_user_name_v1';
 const STORAGE_KEY_PACKING_CATEGORIES = 'wayfarer_packing_categories_v1';
 const STORAGE_KEY_CALENDAR_CATEGORIES = 'wayfarer_calendar_categories_v1';
 const STORAGE_KEY_TEMPLATES_MIGRATED = 'wayfarer_indian_templates_v2';
+const STORAGE_KEY_WIZARD_DRAFT = 'wayfarer_wizard_draft_v1';
+
 const REMOVED_LEGACY_IDS = new Set([
   'trip-sample-kyoto-tokyo',
   'trip-template-mumbai-munnar',
@@ -91,10 +140,50 @@ const REMOVED_LEGACY_IDS = new Set([
 ]);
 const TEMPLATE_IDS = new Set(SAMPLE_TRIPS.map((t) => t.id));
 
+const getDefaultStartDate = (): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + 14);
+  return d.toISOString().split('T')[0];
+};
+
+const createInitialWizardDraft = (): WizardDraft => ({
+  from: 'Pune',
+  to: 'Malvan, Konkan',
+  startDate: getDefaultStartDate(),
+  numDays: 5,
+  budget: 25000,
+  wakeTime: '07:30',
+  dailyStartTime: '09:00',
+  pace: 'balanced',
+  copiedProvider: null,
+  importedItems: [],
+  importedSourceName: null,
+});
+
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'U';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const deriveScreenFromPath = (pathname: string): ViewScreen => {
+  if (pathname.startsWith('/new')) return 'wizard';
+  if (pathname.startsWith('/planner')) return 'planner';
+  if (pathname.startsWith('/review')) return 'review';
+  if (pathname.startsWith('/trips')) return 'trips';
+  if (pathname.startsWith('/settings')) return 'settings';
+  return 'home';
+};
+
 const TripContext = createContext<TripContextType | undefined>(undefined);
 
 export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [screen, setScreen] = useState<ViewScreen>('home');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const screen = useMemo(() => deriveScreenFromPath(location.pathname), [location.pathname]);
+
   const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY_THEME);
@@ -119,8 +208,19 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return 'INR';
   });
 
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [userName, setUserNameState] = useState<string>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_USER_NAME);
+      if (stored && stored.trim()) return stored.trim();
+    } catch {}
+    return 'Pratik Kabade';
+  });
+
+  const userEmail = 'thisispratikkabade@gmail.com';
+  const userInitials = useMemo(() => getInitials(userName), [userName]);
+
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const [use12h, setUse12hState] = useState<boolean>(() => {
     try {
@@ -139,6 +239,37 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
     return 'normal';
   });
+
+  const [wizardDraft, setWizardDraft] = useState<WizardDraft>(() => {
+    try {
+      const stored = sessionStorage.getItem(STORAGE_KEY_WIZARD_DRAFT);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === 'object') {
+          return { ...createInitialWizardDraft(), ...parsed };
+        }
+      }
+    } catch {}
+    return createInitialWizardDraft();
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY_WIZARD_DRAFT, JSON.stringify(wizardDraft));
+    } catch {}
+  }, [wizardDraft]);
+
+  const updateWizardDraft = useCallback((updates: Partial<WizardDraft>) => {
+    setWizardDraft((prev) => ({ ...prev, ...updates }));
+  }, []);
+
+  const resetWizardDraft = useCallback(() => {
+    const fresh = createInitialWizardDraft();
+    setWizardDraft(fresh);
+    try {
+      sessionStorage.setItem(STORAGE_KEY_WIZARD_DRAFT, JSON.stringify(fresh));
+    } catch {}
+  }, []);
 
   const [packingCategories, setPackingCategories] = useState<PackingCategoryOption[]>(() => {
     try {
@@ -192,12 +323,49 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
   }, []);
 
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => {
-      setToast((prev) => (prev === msg ? null : prev));
-    }, 2800);
+  const dismissToast = useCallback(() => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToast(null);
   }, []);
+
+  const showToast = useCallback((msg: string, options?: ShowToastOptions) => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const undoable = Boolean(options?.undoable);
+    const duration = options?.durationMs ?? (undoable ? 5500 : 3000);
+
+    setToast({ id, message: msg, undoable });
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast((prev) => (prev?.id === id ? null : prev));
+      toastTimerRef.current = null;
+    }, duration);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
+  const setUserName = useCallback(
+    (name: string) => {
+      const cleaned = name.trim() || 'Traveler';
+      setUserNameState(cleaned);
+      try {
+        localStorage.setItem(STORAGE_KEY_USER_NAME, cleaned);
+      } catch {}
+      showToast(`Profile name updated to ${cleaned}`);
+    },
+    [showToast]
+  );
 
   const [trips, setTrips] = useState<Trip[]>(() => {
     const fromHash = decodeTripFromHash();
@@ -237,6 +405,52 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
     return SAMPLE_TRIP.id;
   });
+
+  // Sync URL tripId when navigating via browser back/forward on /planner/:tripId or /review/:tripId
+  useEffect(() => {
+    const match = location.pathname.match(/^\/(?:planner|review)\/([^/]+)/);
+    if (match && match[1]) {
+      const routeTripId = decodeURIComponent(match[1]);
+      if (routeTripId !== currentTripId && trips.some((t) => t.id === routeTripId)) {
+        setCurrentTripId(routeTripId);
+      }
+    }
+  }, [location.pathname, currentTripId, trips]);
+
+  // If a shared trip hash is present on initial load, open planner cleanly
+  useEffect(() => {
+    const fromHash = decodeTripFromHash();
+    if (fromHash && location.pathname === '/') {
+      navigate(`/planner/${encodeURIComponent(fromHash.id)}`, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setScreen = useCallback(
+    (nextScreen: ViewScreen, tripId?: string) => {
+      const targetTripId = tripId || currentTripId;
+      switch (nextScreen) {
+        case 'home':
+          navigate('/');
+          break;
+        case 'wizard':
+          navigate('/new');
+          break;
+        case 'planner':
+          navigate(targetTripId ? `/planner/${encodeURIComponent(targetTripId)}` : '/planner');
+          break;
+        case 'review':
+          navigate(targetTripId ? `/review/${encodeURIComponent(targetTripId)}` : '/review');
+          break;
+        case 'trips':
+          navigate('/trips');
+          break;
+        case 'settings':
+          navigate('/settings');
+          break;
+      }
+    },
+    [navigate, currentTripId]
+  );
 
   const [activeDay, setActiveDay] = useState<number>(1);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -350,30 +564,32 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
       to: string;
       startDate: string;
       numDays: number;
+      budget?: number;
       preferredWakeTime: string;
       dailyStartTime: string;
-      pace: 'relaxed' | 'balanced' | 'packed';
+      pace: TripPace;
+      items?: ItineraryItem[];
     }) => {
+      const initialItems = Array.isArray(data.items) ? data.items : [];
+      const maxItemDay = initialItems.reduce((max, item) => Math.max(max, item.day), 1);
+      const finalDays = Math.max(1, data.numDays, maxItemDay);
+
       const newTrip: Trip = {
         id: 'trip-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
         title: `${data.to} Itinerary`,
         from: data.from,
         to: data.to,
         startDate: data.startDate,
-        numDays: Math.max(1, data.numDays),
+        numDays: finalDays,
+        budget: data.budget && data.budget > 0 ? data.budget : undefined,
         preferences: {
           preferredWakeTime: data.preferredWakeTime,
           dailyStartTime: data.dailyStartTime,
           pace: data.pace,
+          budget: data.budget && data.budget > 0 ? data.budget : undefined,
         },
-        items: [],
-        packingList: [
-          { id: 'pk-1', text: 'Passport / Travel ID', category: 'documents', packed: false },
-          { id: 'pk-2', text: 'Flight / Transit tickets', category: 'documents', packed: false },
-          { id: 'pk-3', text: 'Phone charger & battery bank', category: 'electronics', packed: false },
-          { id: 'pk-4', text: 'Weather appropriate attire', category: 'clothing', packed: false },
-          { id: 'pk-5', text: 'Daily toiletries & medications', category: 'toiletries', packed: false },
-        ],
+        items: initialItems,
+        packingList: generateDefaultPackingList(finalDays),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -382,7 +598,11 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setActiveDay(1);
       setHistory([]);
       setHistoryIndex(-1);
-      showToast('Trip created! Start building your days.');
+      showToast(
+        initialItems.length > 0
+          ? `Trip created with ${initialItems.length} imported events!`
+          : 'Trip created! Start building your days.'
+      );
       return newTrip;
     },
     [showToast]
@@ -412,7 +632,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setCurrentTripId(target.id);
       setActiveDay(1);
-      setScreen('planner');
+      navigate(`/planner/${encodeURIComponent(target.id)}`);
       showToast(`Loaded "${target.title}".`);
       return;
     }
@@ -427,9 +647,9 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prevId && !REMOVED_LEGACY_IDS.has(prevId) ? prevId : SAMPLE_TRIP.id
     );
     setActiveDay(1);
-    setScreen('trips');
+    navigate('/trips');
     showToast('Loaded 3 curated India trip templates.');
-  }, [showToast, setScreen]);
+  }, [showToast, navigate]);
 
   const addItem = useCallback(
     (item: Omit<ItineraryItem, 'id'>) => {
@@ -443,9 +663,30 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return a.start.localeCompare(b.start);
       });
       updateCurrentTripItems(updated);
-      showToast(`Added "${newItem.title}"`);
+      showToast(`Added "${newItem.title}"`, { undoable: true });
     },
     [currentTrip, updateCurrentTripItems, showToast]
+  );
+
+  const addItemsBatch = useCallback(
+    (newItems: ItineraryItem[], nextNumDays?: number) => {
+      if (!currentTrip || newItems.length === 0) return;
+      pushHistory(currentTrip.items);
+      const merged = [...currentTrip.items, ...newItems].sort((a, b) => {
+        if (a.day !== b.day) return a.day - b.day;
+        return a.start.localeCompare(b.start);
+      });
+      const maxDay = merged.reduce((max, i) => Math.max(max, i.day), currentTrip.numDays);
+      const updated: Trip = {
+        ...currentTrip,
+        numDays: Math.max(currentTrip.numDays, nextNumDays || 1, maxDay),
+        items: merged,
+        updatedAt: new Date().toISOString(),
+      };
+      setTrips((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      showToast(`Imported ${newItems.length} events into "${currentTrip.title}"`, { undoable: true });
+    },
+    [currentTrip, pushHistory, showToast]
   );
 
   const updateItem = useCallback(
@@ -453,7 +694,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!currentTrip) return;
       const updated = currentTrip.items.map((i) => (i.id === item.id ? item : i));
       updateCurrentTripItems(updated);
-      showToast(`Updated "${item.title}"`);
+      showToast(`Updated "${item.title}"`, { undoable: true });
     },
     [currentTrip, updateCurrentTripItems, showToast]
   );
@@ -465,7 +706,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const updated = currentTrip.items.filter((i) => i.id !== itemId);
       updateCurrentTripItems(updated);
       if (target) {
-        showToast(`Deleted "${target.title}"`);
+        showToast(`Deleted "${target.title}"`, { undoable: true });
       }
     },
     [currentTrip, updateCurrentTripItems, showToast]
@@ -486,7 +727,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return a.start.localeCompare(b.start);
       });
       updateCurrentTripItems(updated);
-      showToast(`Duplicated "${target.title}"`);
+      showToast(`Duplicated "${target.title}"`, { undoable: true });
     },
     [currentTrip, updateCurrentTripItems, showToast]
   );
@@ -508,20 +749,18 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const finalStart = newStartTime || target.start;
       const finalEnd = newStartTime ? addMinutesToTime(newStartTime, dur > 0 ? dur : 90) : target.end;
 
-      const updated = currentTrip.items.map((i) =>
-        i.id === itemId 
-          ? { ...i, day: targetDay, start: finalStart, end: finalEnd } 
-          : i
-      ).sort((a, b) => {
-        if (a.day !== b.day) return a.day - b.day;
-        return a.start.localeCompare(b.start);
-      });
+      const updated = currentTrip.items
+        .map((i) => (i.id === itemId ? { ...i, day: targetDay, start: finalStart, end: finalEnd } : i))
+        .sort((a, b) => {
+          if (a.day !== b.day) return a.day - b.day;
+          return a.start.localeCompare(b.start);
+        });
 
       updateCurrentTripItems(updated);
       if (newStartTime) {
-        showToast(`Moved "${target.title}" to Day ${targetDay} at ${newStartTime}`);
+        showToast(`Moved "${target.title}" to Day ${targetDay} at ${newStartTime}`, { undoable: true });
       } else {
-        showToast(`Moved "${target.title}" to Day ${targetDay}`);
+        showToast(`Moved "${target.title}" to Day ${targetDay}`, { undoable: true });
       }
     },
     [currentTrip, updateCurrentTripItems, showToast]
@@ -710,9 +949,13 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
+      const hasPacking = Array.isArray(pkg.trip.packingList) && pkg.trip.packingList.length > 0;
       const importedTrip: Trip = {
         ...pkg.trip,
         id: `trip-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        packingList: hasPacking
+          ? pkg.trip.packingList
+          : generateDefaultPackingList(pkg.trip.numDays || 1),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -735,15 +978,10 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
-        if (e.key === 'Escape' && isAddModalOpen) {
-          closeAddModal();
-        }
         return;
       }
 
-      if (e.key === 'Escape' && isAddModalOpen) {
-        closeAddModal();
-      } else if (e.key === 'n' || e.key === 'N') {
+      if (e.key === 'n' || e.key === 'N') {
         if (!isAddModalOpen && screen === 'planner') {
           e.preventDefault();
           openAddModal(activeDay);
@@ -753,7 +991,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isAddModalOpen, closeAddModal, openAddModal, activeDay, screen]);
+  }, [isAddModalOpen, openAddModal, activeDay, screen]);
 
   return (
     <TripContext.Provider
@@ -771,6 +1009,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeDay,
         setActiveDay,
         addItem,
+        addItemsBatch,
         updateItem,
         deleteItem,
         duplicateItem,
@@ -791,6 +1030,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleTheme,
         toast,
         showToast,
+        dismissToast,
         togglePackingItem,
         addPackingItem,
         deletePackingItem,
@@ -806,12 +1046,17 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetCalendarCategories,
         currency,
         setCurrency,
-        isProfileOpen,
-        setIsProfileOpen,
+        userName,
+        setUserName,
+        userEmail,
+        userInitials,
         use12h,
         setUse12h,
         calendarDensity,
         setCalendarDensity,
+        wizardDraft,
+        updateWizardDraft,
+        resetWizardDraft,
       }}
     >
       {children}

@@ -214,10 +214,11 @@ export const Timeline: React.FC = () => {
                   }`}
                 >
                   <span className="text-emerald-600 dark:text-emerald-400 block text-[8px] sm:text-[9px] uppercase tracking-wider font-bold">
-                    Est. Budget
+                    {currentTrip.budget ? 'Cost / Budget' : 'Est. Budget'}
                   </span>
                   <span className="font-bold font-mono text-emerald-900 dark:text-emerald-200 tabular-nums">
                     {formatCurrency(tripSummary.totalCost, currency)}
+                    {currentTrip.budget ? ` / ${formatCurrency(currentTrip.budget, currency)}` : ''}
                   </span>
                 </button>
               </div>

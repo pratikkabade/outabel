@@ -11,10 +11,17 @@ import {
   Columns,
   List,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Bot,
+  GripVertical,
+  Paperclip,
+  Ticket,
+  Undo2,
+  X
 } from 'lucide-react';
 import { useTrip, CalendarDensity } from '../context/TripContext';
-import { ItineraryItem, ItemType } from '../types/trip';
+import { AIImportModal } from './AIImportModal';
+import { ItineraryItem, ItemType, SmartSuggestion } from '../types/trip';
 import { resolveCalendarCategory } from '../utils/calendarCategories';
 import { 
   timeToMinutes, 
@@ -55,6 +62,7 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
     activeDay, 
     setActiveDay, 
     openAddModal, 
+    addItem,
     updateItem,
     deleteItem, 
     duplicateItem, 
@@ -62,13 +70,20 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
     calendarCategories,
     currency,
     use12h,
-    calendarDensity
+    calendarDensity,
+    toast,
+    showToast,
+    dismissToast,
+    undo,
+    canUndo
   } = useTrip();
 
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'agenda' : 'multi-day'
   );
+  const [isAIImportOpen, setIsAIImportOpen] = useState(false);
   const [dragHoverTarget, setDragHoverTarget] = useState<{ day: number; hour: number; half: boolean } | null>(null);
+  const [agendaDragHoverDay, setAgendaDragHoverDay] = useState<number | null>(null);
   const [resizeState, setResizeState] = useState<{
     itemId: string;
     startY: number;
@@ -234,6 +249,12 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
     e.dataTransfer.effectAllowed = 'move';
   };
 
+  const handleSuggestionDragStart = (e: React.DragEvent, suggestion: SmartSuggestion) => {
+    e.dataTransfer.setData('application/x-outabel-suggestion', JSON.stringify(suggestion));
+    e.dataTransfer.setData('text/plain', `suggestion:${suggestion.id}`);
+    e.dataTransfer.effectAllowed = 'copyMove';
+  };
+
   const handleResizeStart = (e: React.PointerEvent, item: ItineraryItem) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.stopPropagation();
@@ -258,7 +279,8 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
 
   const handleDragOverSlot = (e: React.DragEvent, day: number, hour: number, half: boolean) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    const isSuggestion = e.dataTransfer.types.includes('application/x-outabel-suggestion');
+    e.dataTransfer.dropEffect = isSuggestion ? 'copy' : 'move';
     setDragHoverTarget({ day, hour, half });
   };
 
@@ -266,13 +288,73 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragHoverTarget(null);
-    const itemId = e.dataTransfer.getData('text/plain');
-    if (!itemId) return;
 
     const hourStr = hour.toString().padStart(2, '0');
     const minuteStr = half ? '30' : '00';
-    const newStartTime = `${hourStr}:${minuteStr}`;
-    moveItemToDay(itemId, day, newStartTime);
+    const targetStartTime = `${hourStr}:${minuteStr}`;
+
+    const suggestionRaw = e.dataTransfer.getData('application/x-outabel-suggestion');
+    if (suggestionRaw) {
+      try {
+        const sug = JSON.parse(suggestionRaw) as SmartSuggestion;
+        const endTime = addMinutesToTime(targetStartTime, sug.defaultDurationMinutes || 60);
+        addItem({
+          type: sug.type,
+          title: sug.defaultTitle,
+          day,
+          start: targetStartTime,
+          end: endTime,
+          ...sug.metadata,
+        });
+        setActiveDay(day);
+        showToast(
+          `Added "${sug.defaultTitle}" to Day ${day} at ${formatTimeDisplay(targetStartTime, use12h)}`,
+          { undoable: true }
+        );
+      } catch {
+        // Ignore malformed drag payload
+      }
+      return;
+    }
+
+    const itemId = e.dataTransfer.getData('text/plain');
+    if (!itemId || itemId.startsWith('suggestion:')) return;
+    moveItemToDay(itemId, day, targetStartTime);
+  };
+
+  const handleDropOnAgendaDay = (e: React.DragEvent, day: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setAgendaDragHoverDay(null);
+
+    const suggestionRaw = e.dataTransfer.getData('application/x-outabel-suggestion');
+    if (suggestionRaw) {
+      try {
+        const sug = JSON.parse(suggestionRaw) as SmartSuggestion;
+        const startTime = sug.defaultTime || '10:00';
+        const endTime = addMinutesToTime(startTime, sug.defaultDurationMinutes || 60);
+        addItem({
+          type: sug.type,
+          title: sug.defaultTitle,
+          day,
+          start: startTime,
+          end: endTime,
+          ...sug.metadata,
+        });
+        setActiveDay(day);
+        showToast(
+          `Added "${sug.defaultTitle}" to Day ${day} at ${formatTimeDisplay(startTime, use12h)}`,
+          { undoable: true }
+        );
+      } catch {
+        // Ignore malformed drag payload
+      }
+      return;
+    }
+
+    const itemId = e.dataTransfer.getData('text/plain');
+    if (!itemId || itemId.startsWith('suggestion:')) return;
+    moveItemToDay(itemId, day);
   };
 
   // Click on empty grid slot to create new event
@@ -292,8 +374,18 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full min-w-0 bg-white dark:bg-[#12151c] rounded-2xl border border-black/10 dark:border-white/10 shadow-sm select-none">
-      {/* Google Calendar Toolbar: Week Grid, Day, Agenda */}
-      <div className="px-2.5 sm:px-3.5 py-2 border-b border-black/10 dark:border-white/10 glass-sticky rounded-t-2xl flex items-center justify-end gap-2 shrink-0">
+      {/* Google Calendar Toolbar: AI Import & View Switcher */}
+      <div className="px-2.5 sm:px-3.5 py-2 border-b border-black/10 dark:border-white/10 glass-sticky rounded-t-2xl flex items-center justify-between gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={() => setIsAIImportOpen(true)}
+          title="Copy GenAI itinerary prompt or import .ics file"
+          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-indigo-500/25 bg-indigo-500/10 hover:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+        >
+          <Bot className="w-3.5 h-3.5 shrink-0" />
+          <span>AI Prompt &amp; .ics</span>
+        </button>
+
         {/* View Mode Switcher: icon-only by default; reveals text smoothly on hover and when active */}
         <div className="flex items-center p-0.5 rounded-lg bg-neutral-200/60 dark:bg-neutral-800/80 text-[11px]">
           {[
@@ -340,8 +432,39 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
         </div>
       </div>
 
-      {/* Main Calendar Area */}
-      {viewMode === 'agenda' ? (
+      {/* Empty Itinerary Quick Start Banner */}
+      {currentTrip.items.length === 0 && (
+        <div className="px-3.5 py-2.5 border-b border-black/8 dark:border-white/10 bg-blue-500/[0.06] dark:bg-blue-500/[0.08] flex flex-wrap items-center justify-between gap-2.5 text-xs shrink-0">
+          <div className="text-neutral-700 dark:text-neutral-200">
+            <span className="font-semibold">Your itinerary is empty.</span>{' '}
+            <span className="text-neutral-500 dark:text-neutral-400">
+              Click any hour slot to add an event, or generate a full schedule with ChatGPT / Claude / Gemini and import the .ics file.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsAIImportOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>Generate with AI / Import .ics</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openAddModal(safeActiveDay)}
+              className="px-3 py-1.5 rounded-lg bg-white dark:bg-neutral-800 border border-black/10 dark:border-white/15 text-neutral-800 dark:text-neutral-100 text-xs font-medium inline-flex items-center gap-1 hover:border-blue-400 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Event</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Calendar Area (with bottom-anchored alert just above Suggestions bar) */}
+      <div className="relative flex-1 min-h-0 flex flex-col">
+        {viewMode === 'agenda' ? (
         /* Agenda View with flush-top pinned sticky date headers & Glass OS blur */
         <div
           ref={agendaScrollRef}
@@ -363,7 +486,23 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
               <section
                 key={day}
                 id={`agenda-day-${day}`}
-                className="rounded-2xl bg-white dark:bg-[#171a21]/90 border border-neutral-200 dark:border-neutral-800 shadow-xs"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  const isSuggestion = e.dataTransfer.types.includes('application/x-outabel-suggestion');
+                  e.dataTransfer.dropEffect = isSuggestion ? 'copy' : 'move';
+                  setAgendaDragHoverDay(day);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setAgendaDragHoverDay((prev) => (prev === day ? null : prev));
+                  }
+                }}
+                onDrop={(e) => handleDropOnAgendaDay(e, day)}
+                className={`rounded-2xl bg-white dark:bg-[#171a21]/90 border shadow-xs transition-colors ${
+                  agendaDragHoverDay === day
+                    ? 'border-blue-500 ring-2 ring-blue-500/30'
+                    : 'border-neutral-200 dark:border-neutral-800'
+                }`}
               >
                 <div
                   onClick={() => setActiveDay(day)}
@@ -455,6 +594,23 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
                                 <MapPin className="w-3 h-3 text-blue-500 shrink-0" />
                                 <span className="truncate">{item.location}</span>
                               </a>
+                            )}
+
+                            {(item.confirmationNumber || (item.attachments && item.attachments.length > 0)) && (
+                              <div className="flex flex-wrap items-center gap-2 mt-1 text-[10px] text-neutral-600 dark:text-neutral-300">
+                                {item.confirmationNumber && (
+                                  <span className="inline-flex items-center gap-1 font-mono font-semibold">
+                                    <Ticket className="w-3 h-3 text-blue-500" />
+                                    <span>{item.confirmationNumber}</span>
+                                  </span>
+                                )}
+                                {item.attachments && item.attachments.length > 0 && (
+                                  <span className="inline-flex items-center gap-1 font-medium">
+                                    <Paperclip className="w-3 h-3 text-neutral-500" />
+                                    <span>{item.attachments.length} file{item.attachments.length > 1 ? 's' : ''}</span>
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -864,6 +1020,16 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
                                   </span>
                                 )}
 
+                                {item.attachments && item.attachments.length > 0 && (
+                                  <span
+                                    title={`${item.attachments.length} attached confirmation file(s)`}
+                                    className="inline-flex items-center gap-0.5 text-[9px] font-mono opacity-80 ml-1"
+                                  >
+                                    <Paperclip className="w-2.5 h-2.5" />
+                                    <span>{item.attachments.length}</span>
+                                  </span>
+                                )}
+
                                 {item.cost ? (
                                   <span className="font-mono font-semibold tabular-nums ml-auto text-neutral-800 dark:text-neutral-100">
                                     {formatCurrency(item.cost, currency)}
@@ -911,43 +1077,71 @@ export const GoogleCalendarTimeline: React.FC<GoogleCalendarTimelineProps> = ({
         </div>
       )}
 
-      {/* Quick Suggestions Strip at bottom */}
+        {toast && (
+          <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-30 w-max max-w-[calc(100%-1.5rem)] pointer-events-none animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <div
+              role="status"
+              aria-live="polite"
+              className="pointer-events-auto bg-neutral-900/95 dark:bg-[#1e2430]/95 text-white px-3.5 py-2 rounded-xl shadow-xl border border-white/15 backdrop-blur-md text-xs font-medium flex items-center gap-2.5"
+            >
+              <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+              <span className="truncate">{toast.message}</span>
+              {toast.undoable && canUndo && (
+                <button
+                  type="button"
+                  onClick={undo}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/35 text-blue-300 font-semibold transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                  <span>Undo</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={dismissToast}
+                aria-label="Dismiss alert"
+                title="Dismiss"
+                className="p-1 rounded-lg hover:bg-white/15 text-neutral-300 hover:text-white transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Quick Suggestions Strip at bottom (Drag & Drop onto any Day & Slot) */}
       {activeDaySuggestions.length > 0 && (
-        <div className="px-3 sm:px-4 py-2 border-t border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-[#171b24] rounded-b-2xl flex items-center justify-between gap-3 text-xs shrink-0">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mobile-no-scrollbar">
-            <span className="font-semibold text-neutral-600 dark:text-neutral-400 flex items-center gap-1 shrink-0 text-[11px]">
+        <div className="px-3 sm:px-4 py-2 border-t border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-[#171b24] rounded-b-2xl flex items-center gap-2 text-xs shrink-0">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mobile-no-scrollbar w-full">
+            <span className="font-semibold text-neutral-600 dark:text-neutral-400 flex items-center gap-1.5 shrink-0 text-[11px]">
               <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-              <span>Smart Suggestions for Day {safeActiveDay}:</span>
+              <span>Suggestions</span>
             </span>
 
-            {activeDaySuggestions.slice(0, 4).map((sug) => (
-              <button
+            {activeDaySuggestions.slice(0, 6).map((sug) => (
+              <div
                 key={sug.id}
-                type="button"
-                onClick={() => {
-                  openAddModal(safeActiveDay, {
-                    type: sug.type,
-                    title: sug.defaultTitle,
-                    day: safeActiveDay,
-                    start: sug.defaultTime,
-                    end: addMinutesToTime(sug.defaultTime, sug.defaultDurationMinutes),
-                    ...sug.metadata,
-                  });
-                }}
-                title={sug.contextReason}
-                className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-medium text-[11px] flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors"
+                draggable={true}
+                onDragStart={(e) => handleSuggestionDragStart(e, sug)}
+                title={`${sug.contextReason} — Drag onto any day and time slot to add`}
+                className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/15 text-blue-700 dark:text-blue-300 font-medium text-[11px] flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-grab active:cursor-grabbing select-none"
               >
-                <Plus className="w-3 h-3" />
+                <GripVertical className="w-3 h-3 opacity-60 shrink-0" />
                 <span>{sug.label}</span>
-              </button>
+                <span className="text-[10px] font-mono opacity-70">
+                  {formatDuration(sug.defaultDurationMinutes)}
+                </span>
+              </div>
             ))}
-          </div>
-
-          <div className="text-[11px] text-neutral-400 hidden lg:block shrink-0">
-            Click any hour slot on the calendar grid to schedule an event
           </div>
         </div>
       )}
+
+      <AIImportModal
+        isOpen={isAIImportOpen}
+        onClose={() => setIsAIImportOpen(false)}
+      />
     </div>
   );
 };

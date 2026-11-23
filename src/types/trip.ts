@@ -6,6 +6,15 @@ export type MealType = 'breakfast' | 'brunch' | 'lunch' | 'dinner' | 'snack' | '
 
 export type TripPace = 'relaxed' | 'balanced' | 'packed';
 
+export interface ItemAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl: string;
+  addedAt: string;
+}
+
 export interface ItineraryItem {
   id: string;
   type: ItemType;
@@ -23,12 +32,17 @@ export interface ItineraryItem {
   stayName?: string;
   isCheckIn?: boolean;
   isCheckOut?: boolean;
+  confirmationNumber?: string;
+  terminalOrPlatform?: string;
+  providerName?: string;
+  attachments?: ItemAttachment[];
 }
 
 export interface TripPreferences {
   preferredWakeTime: string;
   dailyStartTime: string;
   pace: TripPace;
+  budget?: number;
 }
 
 export type CategoryColor =
@@ -79,6 +93,7 @@ export interface Trip {
   to: string;
   startDate: string;
   numDays: number;
+  budget?: number;
   preferences: TripPreferences;
   items: ItineraryItem[];
   packingList?: PackingItem[];
@@ -97,4 +112,4 @@ export interface SmartSuggestion {
   metadata?: Partial<ItineraryItem>;
 }
 
-export type ViewScreen = 'home' | 'wizard' | 'planner' | 'review' | 'trips';
+export type ViewScreen = 'home' | 'wizard' | 'planner' | 'review' | 'trips' | 'settings';

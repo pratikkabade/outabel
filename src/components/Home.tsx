@@ -1,306 +1,391 @@
-import React from 'react';
-import { 
-  ArrowRight, 
-  Compass, 
-  Sparkles, 
-  Clock, 
-  MapPin, 
-  Calendar, 
-  ShieldCheck, 
-  Layers, 
-  Zap, 
-  Share2, 
-  Car, 
-  Hotel, 
-  UtensilsCrossed 
+import React, { useMemo, useState } from 'react';
+import {
+  ArrowRight,
+  Calendar,
+  CalendarCheck2,
+  CheckSquare,
+  Compass,
+  Plus,
+  Route,
+  Settings,
 } from 'lucide-react';
 import { useTrip } from '../context/TripContext';
+import { Trip } from '../types/trip';
 import { formatCurrency } from '../utils/currency';
+import { generateDefaultPackingList } from '../utils/defaultPackingLists';
 import { SAMPLE_TRIPS } from '../utils/sampleData';
 import { OutabelLogo } from './OutabelLogo';
 
+const TEMPLATE_IDS = new Set(SAMPLE_TRIPS.map((t) => t.id));
+
+const getDefaultDate = (): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + 14);
+  return d.toISOString().split('T')[0];
+};
+
 export const Home: React.FC = () => {
-  const { setScreen, loadSampleTrip, currency } = useTrip();
+  const {
+    trips,
+    currentTrip,
+    setCurrentTrip,
+    createTrip,
+    setScreen,
+    currency,
+  } = useTrip();
+
+  const [quickFrom, setQuickFrom] = useState('Pune');
+  const [quickTo, setQuickTo] = useState('Goa');
+  const [quickStartDate, setQuickStartDate] = useState(getDefaultDate);
+  const [quickDays, setQuickDays] = useState(4);
+
+  // Order trips so user-created / imported trips appear first, followed by saved templates
+  const orderedSavedTrips = useMemo(() => {
+    const custom = trips
+      .filter((t) => !TEMPLATE_IDS.has(t.id))
+      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    const savedTemplates = trips.filter((t) => TEMPLATE_IDS.has(t.id));
+    return [...custom, ...savedTemplates];
+  }, [trips]);
+
+  const previewPackingCount = useMemo(
+    () => generateDefaultPackingList(quickDays).length,
+    [quickDays]
+  );
+
+  const openTripInPlanner = (trip: Trip) => {
+    setCurrentTrip(trip);
+    setScreen('planner', trip.id);
+  };
+
+  const handleQuickCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    const fromVal = quickFrom.trim() || 'Home';
+    const toVal = quickTo.trim() || 'Destination';
+    const daysVal = Math.max(1, Math.min(30, Number(quickDays) || 3));
+
+    const created = createTrip({
+      from: fromVal,
+      to: toVal,
+      startDate: quickStartDate || getDefaultDate(),
+      numDays: daysVal,
+      preferredWakeTime: '07:30',
+      dailyStartTime: '09:00',
+      pace: 'balanced',
+    });
+    setScreen('planner', created.id);
+  };
 
   return (
-    <div className="relative z-10 w-full min-h-screen pb-24 overflow-hidden">
-      <section id="overview" className="max-w-6xl mx-auto px-6 pt-16 md:pt-24 pb-20">
-        <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
-          <div className="flex-1 text-center lg:text-left">
-            <div className="inline-flex items-center gap-3.5 mb-5">
-              <OutabelLogo className="w-12 h-12 sm:w-14 sm:h-14 drop-shadow-md" />
-              <div className="text-left">
-                <div className="text-lg sm:text-xl font-bold tracking-tight text-neutral-900 dark:text-white leading-none">
-                  Outabel
-                </div>
-                <div className="text-[11px] font-semibold tracking-wide uppercase text-blue-600 dark:text-blue-400 mt-1">
-                  Next-Generation Travel Design · 100% Offline
-                </div>
-              </div>
-            </div>
-
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-neutral-900 dark:text-neutral-50 leading-[1.08] mb-6">
-              Travel itineraries crafted with clarity, fluidity, and rhythm.
+    <div className="relative z-10 w-full min-h-[calc(100dvh-65px)] pb-16">
+      {/* Hero */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-14">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-stretch">
+          {/* Left Column: Clear Positioning + Primary Actions */}
+          <div className="lg:col-span-6 flex flex-col justify-center">
+            <h1
+              style={{ fontSize: 'clamp(2.25rem, 3.8vw, 3.35rem)' }}
+              className="font-bold tracking-tight text-neutral-900 dark:text-neutral-50 leading-[1.08] text-balance"
+            >
+              Plan every day of your trip on one clean timeline.
             </h1>
 
-            <p className="text-lg sm:text-xl text-neutral-600 dark:text-neutral-300 font-normal leading-relaxed max-w-xl mx-auto lg:mx-0 mb-8">
-              Outabel transforms scattered bookings and chaotic notes into a calm, horizontal liquid glass timeline. Compose your days with sensible pacing, smart rule-based guidance, and instant calendar export.
+            <p className="text-base sm:text-lg text-neutral-600 dark:text-neutral-300 leading-relaxed max-w-xl mt-5">
+              Organize transit, stays, meals, and booking confirmations hour by hour—with overlap detection, separate packing checklists tailored to your trip length, and calendar exports.
             </p>
 
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4">
+            <div className="flex flex-wrap items-center gap-3 mt-8">
               <button
                 type="button"
                 onClick={() => setScreen('wizard')}
-                className="btn-primary text-base py-3 px-6 rounded-2xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/35 cursor-pointer"
+                className="btn-primary text-sm py-3 px-6 rounded-2xl shadow-lg shadow-blue-500/20 cursor-pointer whitespace-nowrap"
               >
-                <span>Get Started</span>
-                <ArrowRight className="w-4 h-4 ml-1" />
+                <Compass className="w-4 h-4" />
+                <span>Guided Trip Wizard</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => loadSampleTrip()}
-                className="btn-ghost text-base py-3 px-6 rounded-2xl cursor-pointer"
+                onClick={() => setScreen('trips')}
+                className="btn-ghost text-sm py-3 px-5 rounded-2xl cursor-pointer whitespace-nowrap"
               >
-                <span>Browse 3 India Templates</span>
+                <span>Browse Saved Trips ({orderedSavedTrips.length})</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-
-            <div className="mt-6 flex flex-wrap items-center justify-center lg:justify-start gap-2">
-              {SAMPLE_TRIPS.map((tpl) => (
-                <button
-                  key={tpl.id}
-                  type="button"
-                  onClick={() => loadSampleTrip(tpl.id)}
-                  className="chip text-xs py-1 px-2.5 cursor-pointer hover:border-blue-400 transition-colors"
-                >
-                  <span>{tpl.from.split(',')[0].split(' (')[0]} → {tpl.to.split(',')[0].split(' & ')[0]} ({tpl.numDays}d)</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-10 flex items-center justify-center lg:justify-start gap-6 text-xs text-neutral-500 dark:text-neutral-400">
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                <span>Zero cloud tracking</span>
-              </div>
-              <span aria-hidden="true">·</span>
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-blue-500" />
-                <span>Intelligent gap warnings</span>
-              </div>
-              <span aria-hidden="true">·</span>
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-purple-500" />
-                <span>Apple & Google Calendar sync</span>
-              </div>
-            </div>
           </div>
 
-          <div className="flex-1 w-full max-w-lg lg:max-w-none">
-            <div className="glass-card p-6 sm:p-8 relative overflow-hidden border border-black/10 dark:border-white/10 shadow-lg">
-              <div className="flex items-center justify-between pb-5 border-b border-black/5 dark:border-white/10 mb-6">
-                <div>
-                  <div className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Day 1 of 4 · Friday, Dec 4</div>
-                  <div className="text-lg font-bold text-neutral-900 dark:text-white">Sangli to Malvan Coastal Drive</div>
+          {/* Right Column: New-User Onboarding & Quick-Start Launchpad */}
+          <div className="lg:col-span-6 flex">
+            <div className="glass-card w-full p-5 sm:p-6 border border-black/8 dark:border-white/12 flex flex-col justify-between gap-5">
+              <div>
+                <div className="pb-4 border-b border-black/8 dark:border-white/10">
+                  <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                    Getting Started
+                  </div>
+                  <h2 className="text-lg font-bold text-neutral-900 dark:text-white mt-1">
+                    How Outabel sets up your trip
+                  </h2>
                 </div>
-                <div className="chip text-xs">
-                  <span>Balanced Pace</span>
+
+                {/* 3 Concrete Onboarding Steps */}
+                <div className="divide-y divide-black/6 dark:divide-white/8 mt-1">
+                  <div className="py-3 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Route className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-neutral-900 dark:text-white">
+                        1. Pick route &amp; dates (or import AI .ics)
+                      </div>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 leading-relaxed">
+                        Start blank below, or use the Guided Wizard to copy a prompt for Gemini/Claude and import a ready-made .ics draft.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="py-3 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <CalendarCheck2 className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-neutral-900 dark:text-white">
+                        2. Drag events onto the timeline
+                      </div>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 leading-relaxed">
+                        Schedule flights, stays, and meals across days with overlap checks, ticket PDFs, and Google Maps links.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="py-3 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <CheckSquare className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-neutral-900 dark:text-white">
+                        3. Auto packing checklist &amp; export
+                      </div>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 leading-relaxed">
+                        Every new trip prepares a separate item-by-item checklist for your trip length plus .ics and PDF exports.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-3.5">
-                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-white/5 border border-black/5 dark:border-white/10 flex items-start gap-3.5 shadow-xs">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                    <Car className="w-4.5 h-4.5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">Phonda Ghat Drive to Tarkarli</div>
-                      <span className="text-xs font-mono tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0">08:45 – 12:00</span>
-                    </div>
-                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">Kolhapur → Malvan via Radhanagari &amp; Kasal</div>
-                  </div>
+              {/* Quick-Start Form */}
+              <form
+                onSubmit={handleQuickCreate}
+                className="pt-4 border-t border-black/8 dark:border-white/10 space-y-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                    Quick Start a Trip
+                  </span>
+                  <span className="text-[11px] font-mono tabular-nums text-neutral-500 dark:text-neutral-400">
+                    Auto-adds {previewPackingCount} packing items
+                  </span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-white/5 border border-black/5 dark:border-white/10 flex items-start gap-3.5 shadow-xs">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                    <Hotel className="w-4.5 h-4.5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">Check-in: Tarkarli Beachfront Resort</div>
-                      <span className="text-xs font-mono tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0">12:15 – 13:00</span>
-                    </div>
-                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">Tarkarli, Malvan · Bill settled at check-out</div>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <input
+                    type="text"
+                    value={quickFrom}
+                    onChange={(e) => setQuickFrom(e.target.value)}
+                    placeholder="From (e.g. Pune)"
+                    aria-label="Departure city"
+                    className="input h-9 text-xs py-1.5 px-3"
+                    required
+                  />
+                  <input
+                    type="text"
+                    value={quickTo}
+                    onChange={(e) => setQuickTo(e.target.value)}
+                    placeholder="Destination (e.g. Goa)"
+                    aria-label="Destination city"
+                    className="input h-9 text-xs py-1.5 px-3"
+                    required
+                  />
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-white/5 border border-black/5 dark:border-white/10 flex items-start gap-3.5 shadow-xs">
-                  <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                    <UtensilsCrossed className="w-4.5 h-4.5" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 items-center">
+                  <input
+                    type="date"
+                    value={quickStartDate}
+                    onChange={(e) => setQuickStartDate(e.target.value)}
+                    aria-label="Start date"
+                    className="input h-9 text-xs py-1.5 px-3 font-mono"
+                    required
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={quickDays}
+                      onChange={(e) =>
+                        setQuickDays(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 1)))
+                      }
+                      aria-label="Number of days"
+                      className="input h-9 text-xs py-1.5 px-3 font-mono tabular-nums w-full"
+                      required
+                    />
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400 shrink-0">
+                      days
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">Malvani Surmai Thali at Chaitanya</div>
-                      <span className="text-xs font-mono tabular-nums text-neutral-500 dark:text-neutral-400 shrink-0">13:30 – 14:45</span>
-                    </div>
-                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">Malvan Town · Amboli, Solkadhi &amp; fresh catch</div>
-                  </div>
+                  <button
+                    type="submit"
+                    className="col-span-2 sm:col-span-1 btn-primary h-9 text-xs py-1.5 px-4 cursor-pointer whitespace-nowrap justify-center"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Create Trip</span>
+                  </button>
                 </div>
-              </div>
-
-              <div className="mt-5 pt-4 border-t border-black/5 dark:border-white/10 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>Timeline harmonized · No schedule conflicts</span>
-                </span>
-                <span className="font-mono tabular-nums font-semibold text-neutral-900 dark:text-neutral-100">
-                  Day 1 Est. {formatCurrency(2300, currency)}
-                </span>
-              </div>
+              </form>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-black/5 dark:border-white/10">
-        <div className="max-w-2xl mb-12">
-          <div className="text-xs font-semibold tracking-wide uppercase text-blue-600 dark:text-blue-400 mb-2">What This App Is</div>
-          <h2 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white mb-4">
-            A sanctuary for calm, deliberate travel planning.
-          </h2>
-          <p className="text-neutral-600 dark:text-neutral-300 text-base leading-relaxed">
-            Most travel tools burden you with noisy ads, rigid templates, and bloated feature sets. Outabel strips away the noise to provide a serene digital drafting canvas. It respects your time, aligns with your natural travel pace, and keeps your entire itinerary stored safely in your own browser.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-card p-6 border border-black/5 dark:border-white/10">
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-5">
-              <Compass className="w-5 h-5" />
-            </div>
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Human Rhythm First</h3>
-            <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-              Configure your personal wake-up hour, daily start time, and preferred travel pace. The itinerary adapts seamlessly to prevent exhaustion and overscheduling.
-            </p>
-          </div>
-
-          <div className="glass-card p-6 border border-black/5 dark:border-white/10">
-            <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-5">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Zero-API Smart Rules</h3>
-            <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-              Enjoy one-tap context chips that anticipate your logical next step: suggesting luggage drop-off after flights, dinner windows around dusk, or buffers after long excursions.
-            </p>
-          </div>
-
-          <div className="glass-card p-6 border border-black/5 dark:border-white/10">
-            <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-5">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Direct Sync Everywhere</h3>
-            <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-              Export whole-trip standard .ics files compatible with Apple Calendar and Microsoft Outlook, or fire individual events directly into Google Calendar with zero friction.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="workflow" className="max-w-6xl mx-auto px-6 py-16 border-t border-black/5 dark:border-white/10">
-        <div className="text-center max-w-2xl mx-auto mb-14">
-          <div className="text-xs font-semibold tracking-wide uppercase text-blue-600 dark:text-blue-400 mb-2">Effortless Workflow</div>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-900 dark:text-white mb-4">
-            Three simple steps from dream to departure.
-          </h2>
-          <p className="text-neutral-600 dark:text-neutral-300 text-base">
-            No endless configuration forms. Answer three focused questions and begin organizing your days immediately.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-          <div className="glass-card p-8 border border-black/5 dark:border-white/10 relative">
-            <div className="text-4xl font-bold font-mono text-blue-600/20 dark:text-blue-400/20 mb-4">01</div>
-            <h3 className="text-xl font-semibold text-neutral-900 dark:text-white mb-3">Set Route & Pace</h3>
-            <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed mb-4">
-              Enter your departure, destination, and trip span. Choose whether your style is relaxed, balanced, or packed, along with your preferred morning start time.
-            </p>
-            <div className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-2">
-              <span>Interactive one-question wizard</span>
-              <span aria-hidden="true">·</span>
-              <span>Smooth animations</span>
-            </div>
-          </div>
-
-          <div className="glass-card p-8 border border-black/5 dark:border-white/10 relative">
-            <div className="text-4xl font-bold font-mono text-blue-600/20 dark:text-blue-400/20 mb-4">02</div>
-            <h3 className="text-xl font-semibold text-neutral-900 dark:text-white mb-3">Craft on the Timeline</h3>
-            <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed mb-4">
-              Glide across days or check the left-hand overview accordion. Add flights, hotels, food, activities, or buffer windows with instant conflict detection.
-            </p>
-            <div className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-2">
-              <span>Horizontal day axis</span>
-              <span aria-hidden="true">·</span>
-              <span>Drag-and-drop between days</span>
-            </div>
-          </div>
-
-          <div className="glass-card p-8 border border-black/5 dark:border-white/10 relative">
-            <div className="text-4xl font-bold font-mono text-blue-600/20 dark:text-blue-400/20 mb-4">03</div>
-            <h3 className="text-xl font-semibold text-neutral-900 dark:text-white mb-3">Export & Take Off</h3>
-            <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed mb-4">
-              Review your entire trip on a synchronized monthly or weekly calendar. Download universal .ics schedules, batch push to Google Calendar, and check packing lists.
-            </p>
-            <div className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-2">
-              <span>Google Calendar batch importer</span>
-              <span aria-hidden="true">·</span>
-              <span>Print-friendly sheets</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="max-w-4xl mx-auto px-6 py-20 text-center">
-        <div className="glass-card p-10 sm:p-14 border border-black/5 dark:border-white/10 relative overflow-hidden">
-          <div className="max-w-xl mx-auto">
-            <OutabelLogo className="w-14 h-14 mx-auto mb-5 drop-shadow-md" />
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-900 dark:text-white mb-4">
-              Begin planning your next journey now.
+      {/* Saved & Starter Trips Directory */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-12 border-t border-black/8 dark:border-white/10">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
+              Your Trips ({orderedSavedTrips.length})
             </h2>
-            <p className="text-neutral-600 dark:text-neutral-300 text-base mb-8">
-              Experience the clarity of fluid horizontal planning. Set your pace, drop your destinations, and enjoy the journey.
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+              Open any created trip or starter itinerary directly in the timeline or review workspace.
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-4">
-              <button
-                type="button"
-                onClick={() => setScreen('wizard')}
-                className="btn-primary text-base py-3 px-8 rounded-2xl shadow-lg shadow-blue-500/25 cursor-pointer"
-              >
-                <span>Launch Trip Wizard</span>
-                <ArrowRight className="w-4 h-4 ml-1" />
-              </button>
-              <button
-                type="button"
-                onClick={() => loadSampleTrip()}
-                className="btn-ghost text-base py-3 px-8 rounded-2xl cursor-pointer"
-              >
-                <span>Open Sample Itineraries</span>
-              </button>
-            </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setScreen('trips')}
+              className="btn-ghost text-xs py-2 px-3.5 whitespace-nowrap cursor-pointer"
+            >
+              <span>Manage All</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setScreen('wizard')}
+              className="btn-primary text-xs py-2 px-3.5 whitespace-nowrap cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Trip</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {orderedSavedTrips.slice(0, 6).map((trip) => {
+            const isCurrent = currentTrip?.id === trip.id;
+            const isCustom = !TEMPLATE_IDS.has(trip.id);
+            const totalBudget = trip.items.reduce((acc, i) => acc + (i.cost || 0), 0);
+
+            return (
+              <div
+                key={trip.id}
+                className={`glass-card p-5 border transition-colors flex flex-col justify-between gap-4 ${
+                  isCurrent
+                    ? 'border-blue-500/45 ring-1 ring-blue-500/20'
+                    : 'border-black/8 dark:border-white/10'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 text-xs text-neutral-500 dark:text-neutral-400 mb-1.5">
+                    <span className="truncate font-medium">
+                      {trip.from} → {trip.to}
+                    </span>
+                    <span className="shrink-0 font-semibold text-blue-600 dark:text-blue-400">
+                      {isCurrent ? 'Active' : isCustom ? 'Created' : 'Template'}
+                    </span>
+                  </div>
+
+                  <h3 className="text-base font-bold text-neutral-900 dark:text-white truncate">
+                    {trip.title}
+                  </h3>
+
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400 font-mono tabular-nums mt-2">
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-blue-500" />
+                      <span>{trip.startDate}</span>
+                    </span>
+                    <span>·</span>
+                    <span>{trip.numDays}d</span>
+                    <span>·</span>
+                    <span>{trip.items.length} events</span>
+                    {totalBudget > 0 && (
+                      <>
+                        <span>·</span>
+                        <span className="text-neutral-800 dark:text-neutral-200 font-semibold">
+                          {formatCurrency(totalBudget, currency)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-3 border-t border-black/6 dark:border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => openTripInPlanner(trip)}
+                    className="btn-primary text-xs py-1.5 px-3.5 whitespace-nowrap cursor-pointer"
+                  >
+                    Open Timeline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTrip(trip);
+                      setScreen('review', trip.id);
+                    }}
+                    className="text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer whitespace-nowrap"
+                  >
+                    Review &amp; Packing
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      <footer className="max-w-6xl mx-auto px-6 pt-12 pb-6 border-t border-black/5 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-500 dark:text-neutral-400">
+      {/* Quiet Footer */}
+      <footer className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-4 border-t border-black/8 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-500 dark:text-neutral-400">
         <div className="flex items-center gap-2">
-          <OutabelLogo className="w-6 h-6" />
+          <OutabelLogo className="w-5 h-5" />
           <span className="font-semibold text-neutral-800 dark:text-neutral-200">Outabel</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span>Private & Offline LocalStorage</span>
           <span>·</span>
-          <span>All rights reserved</span>
+          <span>Stored locally in your browser</span>
+        </div>
+
+        <div className="flex items-center gap-5">
+          <button
+            type="button"
+            onClick={() => setScreen('wizard')}
+            className="hover:text-neutral-900 dark:hover:text-neutral-100 cursor-pointer"
+          >
+            New Trip
+          </button>
+          <button
+            type="button"
+            onClick={() => setScreen('trips')}
+            className="hover:text-neutral-900 dark:hover:text-neutral-100 cursor-pointer"
+          >
+            My Trips
+          </button>
+          <button
+            type="button"
+            onClick={() => setScreen('settings')}
+            className="inline-flex items-center gap-1 hover:text-neutral-900 dark:hover:text-neutral-100 cursor-pointer"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>Settings</span>
+          </button>
         </div>
       </footer>
     </div>
